@@ -5,3 +5,6 @@ cmake-build-*/
 
 # tmp
 *.swp
+
+# backup
+backup/

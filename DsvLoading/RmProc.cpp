@@ -61,7 +61,6 @@ void GenerateRangeView ()
     memset (rm.idx, 0, sizeof(point2i)*rm.wid*rm.len);
     memset (rm.di, 0, sizeof(BYTE)*rm.wid*rm.len);
 
-    //?????????????????????
     for (int i=0; i<BKNUM_PER_FRM; i++) {
         for (int j=0; j<LINES_PER_BLK; j++) {
             for (int k=0; k<PNTS_PER_LINE; k++) {

@@ -1,3 +1,15 @@
+#ifndef VECTOR_H
+#define VECTOR_H
+#include <vector>
+#endif
+
+#ifndef CSTDIO_H
+#define CSTDIO_H
+
+#include <cstdio>
+
+#endif
+
 #include <iomanip>
 #include <cstdlib>
 #include <cstring>
@@ -8,7 +20,6 @@
 #include <ctime>
 #include <iostream>
 #include <cmath>
-#include <vector>
 #include <fstream>
 #include <algorithm>
 #include <queue>
@@ -19,7 +30,7 @@
 #include <opencv2/opencv.hpp>
 
 using namespace std;
-using namespace cv;
+//using namespace cv;
 
 const int maxn = 2000000000;
 const double topi = acos(-1.0)/180.0;	// pi/180

@@ -1,15 +1,14 @@
 #include "./DsvLoading/define.h"
+#include "./ScanRegistration/MultiScanRegistration.h"
 
 TRANSINFO	calibInfo;
 
-//HANDLE	dfp=INVALID_HANDLE_VALUE;
 FILE    *dfp;
 FILE    *navFp;
 int     navLeft, navRight;
 int		dsbytesiz = sizeof (point3d)*2 + sizeof (ONEVDNDATA);
 int		dFrmNum=0;
 int		dFrmNo=0;
-int     idxRcsPointCloud=0;
 bool    camCalibFlag=true;
 
 RMAP	rm;
@@ -19,10 +18,20 @@ DMAP	gm, ggm;
 ONEDSVFRAME	*onefrm;
 ONEDSVFRAME	*originFrm;
 std::vector<NAVDATA> nav;
-IplImage * col;
-IplImage *demVis;
-CvFont font;
 std::list<point2d> trajList;
+
+/* loam部分变量定义 */
+pcl::PointCloud<pcl::PointXYZI>::Ptr laserCloudIn(new pcl::PointCloud<pcl::PointXYZI>); /* 单帧原始激光数据 */
+loam::Time pointcloudTime; /* 单帧原始激光时间戳 */
+pcl::visualization::PCLVisualizer viewer("3D Viewer"); /* 单帧原始激光数据可视化窗口 */
+bool is_first_visualization = true;
+
+pcl::PointCloud<pcl::PointXYZI> cornerPointsSharp;      ///< sharp corner points cloud
+pcl::PointCloud<pcl::PointXYZI> cornerPointsLessSharp;  ///< less sharp corner points cloud
+pcl::PointCloud<pcl::PointXYZI> surfPointsFlat;         ///< flat surface points cloud
+pcl::PointCloud<pcl::PointXYZI> surfPointsLessFlat;     ///< less flat surface points cloud
+
+class PointCloudViewer;
 
 bool LoadCalibFile (char *szFile)
 {
@@ -201,6 +210,86 @@ void ProcessOneFrame ()
 
 }
 
+void ConvertPointCloudType ()
+{
+    laserCloudIn->clear();
+    laserCloudIn->width = BKNUM_PER_FRM * LINES_PER_BLK * PNTS_PER_LINE;
+    laserCloudIn->height = 1;
+    laserCloudIn->is_dense = false;
+//    laserCloudIn->resize(laserCloudIn->width * laserCloudIn->height); /* 加入resize后读取数据会出错 */
+    for (int i=0; i<BKNUM_PER_FRM; i++) {
+        for (int j = 0; j < LINES_PER_BLK; j++) {
+            for (int k = 0; k < PNTS_PER_LINE; k++) {
+                point3fi *p = &onefrm->dsv[i].points[j * PNTS_PER_LINE + k];
+                if (!p->i)
+                    continue;
+                pcl::PointXYZI single_laserCloudIn;
+                single_laserCloudIn.x = p->y; single_laserCloudIn.y = p->z; single_laserCloudIn.z = p->x; single_laserCloudIn.intensity = 1.;
+                laserCloudIn->push_back(single_laserCloudIn);
+//                std::cout << "p " << p->x << std::endl;
+//
+//                std::cout << "single_laserCloudIn " << single_laserCloudIn.x << std::endl;
+//                std::cout << "laserCloudIn->points " << laserCloudIn->points[k].x << std::endl;
+//                if (k==2)
+//                    return;
+//                float rng = sqrt(sqr(p->x) + sqr(p->y) + sqr(p->z));
+//                float angv = asin(p->z / rng);
+//                float angh = atan2(p->y, p->x);
+            }
+        }
+    }
+}
+
+void visualizePointCloud ()
+{
+    viewer.setBackgroundColor(0, 0, 0);
+    pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZI> red(cornerPointsSharp.makeShared(), 255, 9, 0);
+    pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZI> green(surfPointsFlat.makeShared(), 0, 255, 0);
+    if(is_first_visualization)
+    {
+        viewer.addPointCloud<pcl::PointXYZI>(laserCloudIn, "Point Cloud");
+        viewer.addPointCloud<pcl::PointXYZI>(cornerPointsSharp.makeShared(), red, "CornerPointSharp");
+        viewer.addPointCloud<pcl::PointXYZI>(surfPointsFlat.makeShared(), green, "surfPointsFlat");
+    }
+    else
+    {
+        viewer.updatePointCloud<pcl::PointXYZI>(laserCloudIn, "Point Cloud");
+        viewer.updatePointCloud<pcl::PointXYZI>(cornerPointsSharp.makeShared(), red, "CornerPointSharp");
+        viewer.updatePointCloud<pcl::PointXYZI>(surfPointsFlat.makeShared(), green, "surfPointsFlat");
+    }
+    is_first_visualization = false;
+    viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "Point Cloud");
+    viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 4, "CornerPointSharp");
+    viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 4, "surfPointsFlat");
+
+    viewer.addCoordinateSystem(1.0);
+    viewer.spinOnce(100);
+}
+
+void ExtractFeatures ()
+{
+    ConvertPointCloudType();
+    loam::MultiScanRegistration multiScan;
+    multiScan.process(laserCloudIn, pointcloudTime, cornerPointsSharp, cornerPointsLessSharp, surfPointsLessFlat, surfPointsFlat);
+
+//    std::cout << "cornerPointsSharp.size = " << cornerPointsSharp.points.size() << std::endl;
+//    std::cout << "cornerPointsLessSharp.size = " << cornerPointsLessSharp.points.size() << std::endl;
+//    std::cout << "surfPointsLessFlat.size = " << surfPointsLessFlat.points.size() << std::endl;
+//    std::cout << "surfPointsFlat.size = " << surfPointsFlat.points.size() << std::endl;
+
+    visualizePointCloud();
+}
+
+void LaserOdometry ()
+{
+
+}
+
+void LaserMapping ()
+{
+
+}
+
 BOOL ReadOneDsvFrame ()
 {
 	DWORD	dwReadBytes;
@@ -300,7 +389,7 @@ void DoProcessingOffline(/*P_CGQHDL64E_INFO_MSG *veloData, P_DWDX_INFO_MSG *dwdx
         exit (1);
     }
     // video
-    VideoCapture cap("/media/sukie/Treasure/Lab/Project/gaobiao/data/2.avi");
+    cv::VideoCapture cap("/media/sukie/Treasure/Lab/Project/gaobiao/data/2.avi");
     FILE* tsFp = fopen("/media/sukie/Treasure/Lab/Project/gaobiao/data/2.avi.ts", "r");
     if (!cap.isOpened()) {
         printf("Error opening video stream or file.\n");
@@ -333,7 +422,7 @@ void DoProcessingOffline(/*P_CGQHDL64E_INFO_MSG *veloData, P_DWDX_INFO_MSG *dwdx
 	IplImage * col = cvCreateImage (cvSize (1024, rm.len*3),IPL_DEPTH_8U,3); 
 	CvFont font;
 	cvInitFont(&font,CV_FONT_HERSHEY_DUPLEX, 1,1, 0, 2);
-    int waitkeydelay=0;
+    int waitkeydelay=10;
 	dFrmNo = 0;
 
     cv::namedWindow("l_dem");
@@ -359,14 +448,17 @@ void DoProcessingOffline(/*P_CGQHDL64E_INFO_MSG *veloData, P_DWDX_INFO_MSG *dwdx
 //            fscanf(tsFp, "%d\n", &vTs);
 //        }
 
-        cv::Mat visImg;
-        if (dm.lmap) {
-            cv::flip(cv::cvarrToMat(dm.lmap),visImg,0);
-            char str[10];
-            sprintf (str, "%d", int(onefrm->dsv[0].millisec));
-            cv:putText(visImg, str, cvPoint(30,30), cv::FONT_HERSHEY_DUPLEX, 1, cv::Scalar(255,255,255));
-            cv::imshow("l_dem",visImg);
-        }
+//        cv::Mat visImg;
+//        if (dm.lmap) {
+//            cv::flip(cv::cvarrToMat(dm.lmap),visImg,0);
+//            char str[10];
+//            sprintf (str, "%d", int(onefrm->dsv[0].millisec));
+//            cv:putText(visImg, str, cvPoint(30,30), cv::FONT_HERSHEY_DUPLEX, 1, cv::Scalar(255,255,255));
+//            cv::imshow("l_dem",visImg);
+//        }
+
+        /* ScanRegistration */
+        ExtractFeatures();
 
 		char WaitKey;
 		WaitKey = cvWaitKey(waitkeydelay);
