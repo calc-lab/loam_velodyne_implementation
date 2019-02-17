@@ -1,0 +1,7 @@
+# clion
+.idea/
+build/
+cmake-build-*/
+
+# tmp
+*.swp
