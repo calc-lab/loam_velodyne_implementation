@@ -66,7 +66,7 @@ class MultiScanRegistration : virtual public BasicScanRegistration
 public:
   MultiScanRegistration(const MultiScanMapper& scanMapper = MultiScanMapper());
   void process(const pcl::PointCloud<pcl::PointXYZI>::Ptr,
-          const Time& scanTime,
+          const long long& scanTime,
           pcl::PointCloud<pcl::PointXYZI> &,
           pcl::PointCloud<pcl::PointXYZI> &,
           pcl::PointCloud<pcl::PointXYZI> &,

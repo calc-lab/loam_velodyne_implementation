@@ -1,5 +1,6 @@
 #include "./DsvLoading/define.h"
 #include "./ScanRegistration/MultiScanRegistration.h"
+#include "./LaserMapping/LaserMapping.h"
 
 TRANSINFO	calibInfo;
 
@@ -22,14 +23,19 @@ std::list<point2d> trajList;
 
 /* loam部分变量定义 */
 pcl::PointCloud<pcl::PointXYZI>::Ptr laserCloudIn(new pcl::PointCloud<pcl::PointXYZI>); /* 单帧原始激光数据 */
-loam::Time pointcloudTime; /* 单帧原始激光时间戳 */
-pcl::visualization::PCLVisualizer viewer("3D Viewer"); /* 单帧原始激光数据可视化窗口 */
+long long pointcloudTime; /* 单帧原始激光时间戳 */
+pcl::visualization::PCLVisualizer viewer("PointCloud Viewer"); /* 单帧原始激光数据可视化窗口 */
+pcl::visualization::PCLVisualizer map_viewer("Map Viewer");
 bool is_first_visualization = true;
+bool is_first_visualization_map = true;
 
 pcl::PointCloud<pcl::PointXYZI> cornerPointsSharp;      ///< sharp corner points cloud
 pcl::PointCloud<pcl::PointXYZI> cornerPointsLessSharp;  ///< less sharp corner points cloud
 pcl::PointCloud<pcl::PointXYZI> surfPointsFlat;         ///< flat surface points cloud
 pcl::PointCloud<pcl::PointXYZI> surfPointsLessFlat;     ///< less flat surface points cloud
+
+pcl::PointCloud<pcl::PointXYZI>::Ptr laserCloudMap(new pcl::PointCloud<pcl::PointXYZI>); /* 激光地图 */
+
 
 class PointCloudViewer;
 
@@ -238,6 +244,7 @@ void ConvertPointCloudType ()
             }
         }
     }
+    pointcloudTime = onefrm->dsv[0].millisec;
 }
 
 void visualizePointCloud ()
@@ -266,6 +273,24 @@ void visualizePointCloud ()
     viewer.spinOnce(100);
 }
 
+void visualizeMap ()
+{
+    map_viewer.setBackgroundColor(0, 0, 0);
+    if(is_first_visualization_map)
+    {
+        map_viewer.addPointCloud<pcl::PointXYZI>(laserCloudMap, "Map");
+    }
+    else
+    {
+        map_viewer.updatePointCloud<pcl::PointXYZI>(laserCloudMap, "Map");
+    }
+    is_first_visualization_map = false;
+    map_viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "Map");
+
+    map_viewer.addCoordinateSystem(1.0);
+    map_viewer.spinOnce(100);
+}
+
 void ExtractFeatures ()
 {
     ConvertPointCloudType();
@@ -277,7 +302,7 @@ void ExtractFeatures ()
 //    std::cout << "surfPointsLessFlat.size = " << surfPointsLessFlat.points.size() << std::endl;
 //    std::cout << "surfPointsFlat.size = " << surfPointsFlat.points.size() << std::endl;
 
-    visualizePointCloud();
+//    visualizePointCloud();
 }
 
 void LaserOdometry ()
@@ -287,7 +312,9 @@ void LaserOdometry ()
 
 void LaserMapping ()
 {
-
+    loam::LaserMapping laserMapping(0.1);
+    laserMapping.process(laserCloudIn, pointcloudTime, nav, laserCloudMap);
+    visualizeMap();
 }
 
 BOOL ReadOneDsvFrame ()
@@ -448,17 +475,21 @@ void DoProcessingOffline(/*P_CGQHDL64E_INFO_MSG *veloData, P_DWDX_INFO_MSG *dwdx
 //            fscanf(tsFp, "%d\n", &vTs);
 //        }
 
-//        cv::Mat visImg;
-//        if (dm.lmap) {
-//            cv::flip(cv::cvarrToMat(dm.lmap),visImg,0);
-//            char str[10];
-//            sprintf (str, "%d", int(onefrm->dsv[0].millisec));
-//            cv:putText(visImg, str, cvPoint(30,30), cv::FONT_HERSHEY_DUPLEX, 1, cv::Scalar(255,255,255));
-//            cv::imshow("l_dem",visImg);
-//        }
+        cv::Mat visImg;
+        if (dm.lmap) {
+            cv::flip(cv::cvarrToMat(dm.lmap),visImg,0);
+            char str[10];
+            sprintf (str, "%d", int(onefrm->dsv[0].millisec));
+            cv:putText(visImg, str, cvPoint(30,30), cv::FONT_HERSHEY_DUPLEX, 1, cv::Scalar(255,255,255));
+            cv::imshow("l_dem",visImg);
+        }
 
         /* ScanRegistration */
         ExtractFeatures();
+
+//        LaserOdometry();
+
+        LaserMapping();
 
 		char WaitKey;
 		WaitKey = cvWaitKey(waitkeydelay);

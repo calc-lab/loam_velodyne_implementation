@@ -44,7 +44,7 @@ MultiScanRegistration::MultiScanRegistration(const MultiScanMapper& scanMapper)
 
 
 void MultiScanRegistration::process(const pcl::PointCloud<pcl::PointXYZI>::Ptr laserCloudIn,
-        const Time& scanTime,
+        const long long& scanTime,
         pcl::PointCloud<pcl::PointXYZI>& _cornerPointsSharp,
         pcl::PointCloud<pcl::PointXYZI>& _cornerPointsLessSharp,
         pcl::PointCloud<pcl::PointXYZI>& _surfPointsLessFlat,

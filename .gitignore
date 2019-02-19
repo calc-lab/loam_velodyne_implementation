@@ -8,3 +8,6 @@ cmake-build-*/
 
 # backup
 backup/
+
+# not ready
+LaserOdometry/

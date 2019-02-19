@@ -159,7 +159,7 @@ namespace loam
     *
     * @param relTime the time relative to the scan time
     */
-    void processScanlines(const Time& scanTime,
+    void processScanlines(const long long& scanTime,
             std::vector<pcl::PointCloud<pcl::PointXYZI>> const& laserCloudScans,
             pcl::PointCloud<pcl::PointXYZI>&,
             pcl::PointCloud<pcl::PointXYZI>&,

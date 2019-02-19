@@ -25,7 +25,7 @@ RegistrationParams::RegistrationParams(const float& scanPeriod_,
       surfaceCurvatureThreshold(surfaceCurvatureThreshold_)
 {};
 
-void BasicScanRegistration::processScanlines(const Time& scanTime,
+void BasicScanRegistration::processScanlines(const long long& scanTime,
         std::vector<pcl::PointCloud<pcl::PointXYZI>> const& laserCloudScans,
         pcl::PointCloud<pcl::PointXYZI>& cornerPointsSharp,
         pcl::PointCloud<pcl::PointXYZI>& cornerPointsLessSharp,
@@ -33,7 +33,7 @@ void BasicScanRegistration::processScanlines(const Time& scanTime,
         pcl::PointCloud<pcl::PointXYZI>& surfPointsFlat)
 {
   // reset internal buffers and set IMU start state based on current scan time
-  reset(scanTime);  
+//  reset(scanTime);
 
   // construct sorted full resolution cloud
   size_t cloudSize = 0;
