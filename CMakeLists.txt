@@ -13,12 +13,14 @@ include_directories(${OpenCV_INCLUDE_DIRS}
         .
         ./DsvLoading
         ./ScanRegistration
+        ./LaserOdometry
         ./LaserMapping)
 link_directories(${PCL_LIBRARY_DIRS})
 
 AUX_SOURCE_DIRECTORY(. DIR_SRCS)
 AUX_SOURCE_DIRECTORY(./DsvLoading DIR_DL_SRCS)
 AUX_SOURCE_DIRECTORY(./ScanRegistration DIR_SR_SRCS)
+AUX_SOURCE_DIRECTORY(./LaserOdometry DIR_LO_SRCS)
 AUX_SOURCE_DIRECTORY(./LaserMapping DIR_LM_SRCS)
 
 message("OpenCV_INCLUDE_DIRS = " ${OpenCV_INCLUDE_DIRS})
@@ -32,6 +34,7 @@ add_executable(LOAM
         ${DIR_SRCS}
         ${DIR_DL_SRCS}
         ${DIR_SR_SRCS}
+        ${DIR_LO_SRCS}
         ${DIR_LM_SRCS})
 target_link_libraries(LOAM
         ${PCL_LIBRARIES}

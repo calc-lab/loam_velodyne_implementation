@@ -267,6 +267,8 @@ void BasicLaserMapping::process(const pcl::PointCloud<pcl::PointXYZI>::Ptr laser
 
    pcl::PointCloud<pcl::PointXYZI> laserCloudInDSStack;
 
+   std::cout << "nav data -> " << cur_state.x << " " << cur_state.y << std::endl;
+
    for (auto const& pt : laserCloudInDS->points)
    {
       pointAssociateToMap(pt, pointSel);

@@ -266,8 +266,8 @@ void visualizePointCloud ()
     }
     is_first_visualization = false;
     viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "Point Cloud");
-    viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 4, "CornerPointSharp");
-    viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 4, "surfPointsFlat");
+    viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 10, "CornerPointSharp");
+    viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 10, "surfPointsFlat");
 
     viewer.addCoordinateSystem(1.0);
     viewer.spinOnce(100);
@@ -302,7 +302,7 @@ void ExtractFeatures ()
 //    std::cout << "surfPointsLessFlat.size = " << surfPointsLessFlat.points.size() << std::endl;
 //    std::cout << "surfPointsFlat.size = " << surfPointsFlat.points.size() << std::endl;
 
-//    visualizePointCloud();
+    visualizePointCloud();
 }
 
 void LaserOdometry ()
@@ -314,7 +314,7 @@ void LaserMapping ()
 {
     loam::LaserMapping laserMapping(0.1);
     laserMapping.process(laserCloudIn, pointcloudTime, nav, laserCloudMap);
-    visualizeMap();
+//    visualizeMap();
 }
 
 BOOL ReadOneDsvFrame ()
