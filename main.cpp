@@ -1,5 +1,6 @@
 #include "./DsvLoading/define.h"
 #include "./ScanRegistration/MultiScanRegistration.h"
+#include "./LaserOdometry/LaserOdometry.h"
 #include "./LaserMapping/LaserMapping.h"
 
 TRANSINFO	calibInfo;
@@ -230,17 +231,8 @@ void ConvertPointCloudType ()
                 if (!p->i)
                     continue;
                 pcl::PointXYZI single_laserCloudIn;
-                single_laserCloudIn.x = p->y; single_laserCloudIn.y = p->z; single_laserCloudIn.z = p->x; single_laserCloudIn.intensity = 1.;
+                single_laserCloudIn.x = p->y; single_laserCloudIn.y = p->z - 2.6; single_laserCloudIn.z = p->x; single_laserCloudIn.intensity = 1.;
                 laserCloudIn->push_back(single_laserCloudIn);
-//                std::cout << "p " << p->x << std::endl;
-//
-//                std::cout << "single_laserCloudIn " << single_laserCloudIn.x << std::endl;
-//                std::cout << "laserCloudIn->points " << laserCloudIn->points[k].x << std::endl;
-//                if (k==2)
-//                    return;
-//                float rng = sqrt(sqr(p->x) + sqr(p->y) + sqr(p->z));
-//                float angv = asin(p->z / rng);
-//                float angh = atan2(p->y, p->x);
             }
         }
     }
@@ -250,17 +242,19 @@ void ConvertPointCloudType ()
 void visualizePointCloud ()
 {
     viewer.setBackgroundColor(0, 0, 0);
+    // TODO: 将可视化对象从surPointsLessFlat改回laserCloudIn
     pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZI> red(cornerPointsSharp.makeShared(), 255, 9, 0);
     pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZI> green(surfPointsFlat.makeShared(), 0, 255, 0);
+    pcl::visualization::PointCloudColorHandlerGenericField<pcl::PointXYZI> handler(surfPointsLessFlat.makeShared(),"intensity");
     if(is_first_visualization)
     {
-        viewer.addPointCloud<pcl::PointXYZI>(laserCloudIn, "Point Cloud");
+        viewer.addPointCloud<pcl::PointXYZI>(surfPointsLessFlat.makeShared(), "Point Cloud");
         viewer.addPointCloud<pcl::PointXYZI>(cornerPointsSharp.makeShared(), red, "CornerPointSharp");
         viewer.addPointCloud<pcl::PointXYZI>(surfPointsFlat.makeShared(), green, "surfPointsFlat");
     }
     else
     {
-        viewer.updatePointCloud<pcl::PointXYZI>(laserCloudIn, "Point Cloud");
+        viewer.updatePointCloud<pcl::PointXYZI>(surfPointsLessFlat.makeShared(), "Point Cloud");
         viewer.updatePointCloud<pcl::PointXYZI>(cornerPointsSharp.makeShared(), red, "CornerPointSharp");
         viewer.updatePointCloud<pcl::PointXYZI>(surfPointsFlat.makeShared(), green, "surfPointsFlat");
     }
@@ -297,10 +291,8 @@ void ExtractFeatures ()
     loam::MultiScanRegistration multiScan;
     multiScan.process(laserCloudIn, pointcloudTime, cornerPointsSharp, cornerPointsLessSharp, surfPointsLessFlat, surfPointsFlat);
 
-//    std::cout << "cornerPointsSharp.size = " << cornerPointsSharp.points.size() << std::endl;
-//    std::cout << "cornerPointsLessSharp.size = " << cornerPointsLessSharp.points.size() << std::endl;
-//    std::cout << "surfPointsLessFlat.size = " << surfPointsLessFlat.points.size() << std::endl;
-//    std::cout << "surfPointsFlat.size = " << surfPointsFlat.points.size() << std::endl;
+    std::cout << "cornerPointsSharp.size = " << cornerPointsSharp.points.size() << std::endl;
+    std::cout << "surfPointsFlat.size = " << surfPointsFlat.points.size() << std::endl;
 
     visualizePointCloud();
 }
@@ -404,37 +396,22 @@ void LoadNav()
 
 void DoProcessingOffline(/*P_CGQHDL64E_INFO_MSG *veloData, P_DWDX_INFO_MSG *dwdxData, P_CJDEMMAP_MSG &demMap, P_CJATTRIBUTEMAP_MSG &attributeMap*/)
 {
-    if (!LoadCalibFile ("/media/sukie/Treasure/Lab/Project/gaobiao/data/vel_hongling.calib")) {
+    if (!LoadCalibFile ("/home/sukie/Lab/Project/gaobiao/data/vel_hongling.calib")) {
         std::cout << "Invalid calibration file" << std::endl;
         getchar ();
         exit (1);
     }
-    // dsv
-    if ((dfp = fopen("/media/sukie/Treasure/Lab/Project/gaobiao/data/hongling_round1_2.dsv", "r")) == NULL) {
+    if ((dfp = fopen("/home/sukie/Lab/Project/gaobiao/data/hongling_round1_2.dsv", "r")) == NULL) {
         printf("File open failure\n");
         getchar ();
         exit (1);
     }
-    // video
-    cv::VideoCapture cap("/media/sukie/Treasure/Lab/Project/gaobiao/data/2.avi");
-    FILE* tsFp = fopen("/media/sukie/Treasure/Lab/Project/gaobiao/data/2.avi.ts", "r");
-    if (!cap.isOpened()) {
-        printf("Error opening video stream or file.\n");
-        getchar();
-        exit(1);
-    }
-    // nav
-    if ((navFp = fopen("/media/sukie/Treasure/Lab/Project/gaobiao/data/all.nav", "r")) == NULL) {
+    if ((navFp = fopen("/home/sukie/Lab/Project/gaobiao/data/all.nav", "r")) == NULL) {
         printf("Nav open failure\n");
         getchar ();
         exit (1);
     }
     LoadNav();
-    // Camera/Velodyne calib file
-    if(!LoadCameraCalib("/media/sukie/Treasure/Lab/Project/gaobiao/data/Sampledata-001-Camera.camera")){
-        printf("Open Camera Calibration files fails.\n");
-        camCalibFlag = false;
-    }
 
     LONGLONG fileSize = myGetFileSize(dfp);
     dFrmNum = fileSize / (BKNUM_PER_FRM) / dsbytesiz;
@@ -466,15 +443,6 @@ void DoProcessingOffline(/*P_CGQHDL64E_INFO_MSG *veloData, P_DWDX_INFO_MSG *dwdx
 
         DrawTraj(dm.lmap);
 
-//        cv::Mat vFrame;
-//        int vTs;
-//        cap >> vFrame;
-//        fscanf(tsFp, "%d\n", &vTs);
-//        while (vTs < onefrm->dsv[0].millisec) {
-//            cap >> vFrame;
-//            fscanf(tsFp, "%d\n", &vTs);
-//        }
-
         cv::Mat visImg;
         if (dm.lmap) {
             cv::flip(cv::cvarrToMat(dm.lmap),visImg,0);
@@ -487,9 +455,9 @@ void DoProcessingOffline(/*P_CGQHDL64E_INFO_MSG *veloData, P_DWDX_INFO_MSG *dwdx
         /* ScanRegistration */
         ExtractFeatures();
 
-//        LaserOdometry();
+        LaserOdometry();
 
-        LaserMapping();
+//        LaserMapping();
 
 		char WaitKey;
 		WaitKey = cvWaitKey(waitkeydelay);
@@ -498,7 +466,7 @@ void DoProcessingOffline(/*P_CGQHDL64E_INFO_MSG *veloData, P_DWDX_INFO_MSG *dwdx
         dFrmNo++;
     }
 
-    cap.release();
+//    cap.release();
 	ReleaseRmap (&rm);
 	ReleaseDmap (&dm);
 	ReleaseDmap (&gm);

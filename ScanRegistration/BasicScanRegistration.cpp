@@ -39,7 +39,6 @@ void BasicScanRegistration::processScanlines(const long long& scanTime,
   size_t cloudSize = 0;
   for (int i = 0; i < laserCloudScans.size(); i++) {
     _laserCloud += laserCloudScans[i];
-
     IndexRange range(cloudSize, 0);
     cloudSize += laserCloudScans[i].size();
     range.second = cloudSize > 0 ? cloudSize - 1 : 0; /* 使用range存储每根激光线起始和终止激光点的索引 */
@@ -47,18 +46,12 @@ void BasicScanRegistration::processScanlines(const long long& scanTime,
   }
 
   extractFeatures();
-  updateIMUTransform();
+//  updateIMUTransform();
 
   cornerPointsSharp = _cornerPointsSharp;
   cornerPointsLessSharp = _cornerPointsLessSharp;
-  surfPointsLessFlat = _surfacePointsLessFlat;
+  surfPointsLessFlat = _laserCloud; // _surfacePointsLessFlat; //TODO: 将传回值从_laserCloud改回_surfacePointsLessFlat
   surfPointsFlat = _surfacePointsFlat;
-//  for(int i = 0; i < _cornerPointsSharp.points.size(); i++){
-//    pcl::PointXYZI single_laserCloudIn;
-//    single_laserCloudIn.x = _cornerPointsSharp.points[i].x;
-//    cornerPointsSharp.points.push_back();
-//  }
-
 }
 
 void BasicScanRegistration::reset(const Time& scanTime)
@@ -141,7 +134,7 @@ void BasicScanRegistration::extractFeatures(const uint16_t& beginIdx)
   // extract features from individual scans
   size_t nScans = _scanIndices.size();
   for (size_t i = beginIdx; i < nScans; i++) {
-    pcl::PointCloud<pcl::PointXYZI>::Ptr surfPointsLessFlatScan(new pcl::PointCloud<pcl::PointXYZI>);
+//    pcl::PointCloud<pcl::PointXYZI>::Ptr surfPointsLessFlatScan(new pcl::PointCloud<pcl::PointXYZI>);
     size_t scanStartIdx = _scanIndices[i].first;
     size_t scanEndIdx = _scanIndices[i].second;
 
@@ -178,7 +171,7 @@ void BasicScanRegistration::extractFeatures(const uint16_t& beginIdx)
         size_t regionIdx = idx - sp;
 
         if (_scanNeighborPicked[scanIdx] == 0 &&
-            _regionCurvature[regionIdx] > _config.surfaceCurvatureThreshold) {
+            _regionCurvature[regionIdx] > 0.9 /*_config.surfaceCurvatureThreshold*/) {
 
           largestPickedNum++;
           if (largestPickedNum <= _config.maxCornerSharp) {
@@ -201,7 +194,7 @@ void BasicScanRegistration::extractFeatures(const uint16_t& beginIdx)
         size_t regionIdx = idx - sp;
 
         if (_scanNeighborPicked[scanIdx] == 0 &&
-            _regionCurvature[regionIdx] < _config.surfaceCurvatureThreshold) {
+            _regionCurvature[regionIdx] < 0.01 /*_config.surfaceCurvatureThreshold*/) {
 
           smallestPickedNum++;
           _regionLabel[regionIdx] = SURFACE_FLAT;
@@ -214,19 +207,19 @@ void BasicScanRegistration::extractFeatures(const uint16_t& beginIdx)
       // extract less flat surface features
       for (int k = 0; k < regionSize; k++) {
         if (_regionLabel[k] <= SURFACE_LESS_FLAT) {
-          surfPointsLessFlatScan->push_back(_laserCloud[sp + k]);
+          _surfacePointsLessFlat.push_back(_laserCloud[sp + k]);
         }
       }
     }
 
     // down size less flat surface point cloud of current scan
-    pcl::PointCloud<pcl::PointXYZI> surfPointsLessFlatScanDS;
-    pcl::VoxelGrid<pcl::PointXYZI> downSizeFilter;
-    downSizeFilter.setInputCloud(surfPointsLessFlatScan);
-    downSizeFilter.setLeafSize(_config.lessFlatFilterSize, _config.lessFlatFilterSize, _config.lessFlatFilterSize);
-    downSizeFilter.filter(surfPointsLessFlatScanDS);
+//    pcl::PointCloud<pcl::PointXYZI> surfPointsLessFlatScanDS;
+//    pcl::VoxelGrid<pcl::PointXYZI> downSizeFilter;
+//    downSizeFilter.setInputCloud(_surfacePointsLessFlat.makeShared());
+//    downSizeFilter.setLeafSize(_config.lessFlatFilterSize, _config.lessFlatFilterSize, _config.lessFlatFilterSize);
+//    downSizeFilter.filter(surfPointsLessFlatScanDS);
 
-    _surfacePointsLessFlat += surfPointsLessFlatScanDS;
+//    _surfacePointsLessFlat += surfPointsLessFlatScanDS;
   }
 }
 
@@ -333,18 +326,6 @@ void BasicScanRegistration::setScanBuffersFor(const size_t& startIdx, const size
       _scanNeighborPicked[i - startIdx] = 1;
     }
   }
-  // Ddbug Output
-  /*
-  printf("%.6f\n",toSec(_scanTime));
-  char filename[50];
-  sprintf(filename, "/home/sukie/Desktop/data/pcl-%ld.txt",1);
-  FILE *fp;
-  fp=fopen(filename,"w");
-  for(int i=startIdx;i<endIdx;i++){
-    fprintf(fp,"%.3f, %.3f, %.3f, %.6f\n",_laserCloud[i].x,_laserCloud[i].y,_laserCloud[i].z,_laserCloud[i].intensity);
-  }
-  fclose(fp);
-  */
 }
 
 void BasicScanRegistration::markAsPicked(const size_t& cloudIdx, const size_t& scanIdx)

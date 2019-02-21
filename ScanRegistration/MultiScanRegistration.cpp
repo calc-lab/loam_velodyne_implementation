@@ -30,13 +30,9 @@ void MultiScanMapper::set(const float &lowerBound,
 
 
 int MultiScanMapper::getRingForAngle(const float& angle) {
+//  return int(((angle * 180 / M_PI) - _lowerBound) * (63. / 26.8));
   return int(((angle * 180 / M_PI) - _lowerBound) * _factor + 0.5);
 }
-
-
-
-
-
 
 MultiScanRegistration::MultiScanRegistration(const MultiScanMapper& scanMapper)
     : _scanMapper(scanMapper)
@@ -50,22 +46,16 @@ void MultiScanRegistration::process(const pcl::PointCloud<pcl::PointXYZI>::Ptr l
         pcl::PointCloud<pcl::PointXYZI>& _surfPointsLessFlat,
         pcl::PointCloud<pcl::PointXYZI>& _surfPointsFlat)
 {
-  /* DYP 可视化传入的点云 */
-//  pcl::visualization::PCLVisualizer viewer("Test Viewer");
-//  viewer.setBackgroundColor(0, 0, 0);
-//  viewer.addPointCloud<pcl::PointXYZI>(laserCloudIn, "laserCloudIn");
-//  viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "laserCloudIn");
-//  viewer.addCoordinateSystem(1.0);
-//  viewer.spinOnce(100);
-
   // determine size of current pointcloud frame
   size_t cloudSize = laserCloudIn->width * laserCloudIn->height;
 
   // determine scan start and end orientations
-  float startOri = -std::atan2(laserCloudIn->points[0].y, laserCloudIn->points[0].x);
-  float endOri = -std::atan2(laserCloudIn->points[cloudSize - 1].y, laserCloudIn->points[cloudSize - 1].x) + 2 * float(M_PI);
+  float startOri = -std::atan2(laserCloudIn->points[0].x, laserCloudIn->points[0].z);
+  float endOri = -std::atan2(laserCloudIn->points[cloudSize - 1].x, laserCloudIn->points[cloudSize - 1].z) + 2 * float(M_PI);
   if (endOri - startOri > 3 * M_PI) endOri -= 2 * M_PI;
   else if (endOri - startOri < M_PI) endOri += 2 * M_PI;
+
+  std::cout << "startOri -> " << startOri << ", endOri" << endOri << std::endl;
 
   // clear all scanline points
   std::for_each(_laserCloudScans.begin(), _laserCloudScans.end(), [](auto&&v) {v.clear(); }); 
@@ -75,6 +65,8 @@ void MultiScanRegistration::process(const pcl::PointCloud<pcl::PointXYZI>::Ptr l
   bool halfPassed = false;
   pcl::PointXYZI point;
   _laserCloudScans.resize(_scanMapper.getNumberOfScanRings());
+
+  float angle_min = 0., angle_max = 0.;
 
   for (int i = 0; i < cloudSize; i++) {
 
@@ -100,6 +92,10 @@ void MultiScanRegistration::process(const pcl::PointCloud<pcl::PointXYZI>::Ptr l
 
     // calculate vertical point angle and scan ID
     float angle = std::atan(point.y / std::sqrt(point.x * point.x + point.z * point.z));
+
+    if(angle > angle_max) angle_max = angle;
+    if(angle < angle_min) angle_min = angle;
+
     int scanID = _scanMapper.getRingForAngle(angle);
 
     if (scanID >= _scanMapper.getNumberOfScanRings() || scanID < 0 ){
@@ -130,15 +126,22 @@ void MultiScanRegistration::process(const pcl::PointCloud<pcl::PointXYZI>::Ptr l
 
     // calculate relative scan time based on point orientation
     float relTime = 0.1 * (ori - startOri) / (endOri - startOri); /* 激光传感器频率为10Hz */
+//    point.intensity = (ori - startOri) / (endOri - startOri) * 256 - 1; /* 检测oritation计算是否正确 */
+//    point.intensity = (scanID - 0.) / (64. - 0.) * 256 - 1; /* 检测scanID计算是否正确 */
     point.intensity = scanID + relTime;
 
-    projectPointToStartOfSweep(point, relTime);
+
+//    projectPointToStartOfSweep(point, relTime);
 
     _laserCloudScans[scanID].push_back(point);
-
   }
+//  std::cout << "angle_max = " << angle_max * 180. / M_PI << ", angle_min = " << angle_min * 180. / M_PI << std::endl;
+//  std::cout << "## total size = " << cloudSize << std::endl;
+//  for(int i = 0; i < 64; i++)
+//      std::cout << "scanID " << i << ", " << "PtsNum " << _laserCloudScans[i].points.size() << std::endl;
 
-  processScanlines(scanTime, _laserCloudScans, _cornerPointsSharp, _cornerPointsLessSharp, _surfPointsLessFlat, _surfPointsFlat);
+
+    processScanlines(scanTime, _laserCloudScans, _cornerPointsSharp, _cornerPointsLessSharp, _surfPointsLessFlat, _surfPointsFlat);
   
 }
 

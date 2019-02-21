@@ -58,8 +58,8 @@ namespace loam
       const int& imuHistorySize_ = 200,
       const int& nFeatureRegions_ = 6,
       const int& curvatureRegion_ = 5,
-      const int& maxCornerSharp_ = 2,
-      const int& maxSurfaceFlat_ = 4,
+      const int& maxCornerSharp_ = 1, //2,
+      const int& maxSurfaceFlat_ = 2, //4,
       const float& lessFlatFilterSize_ = 0.2,
       const float& surfaceCurvatureThreshold_ = 0.1);
 
