@@ -1,7 +1,7 @@
 #include "BasicLaserOdometry.h"
 
 #include "math_utils.h"
-#include <pcl/filters/filter.h>
+//#include <pcl/filters/filter.h>
 #include <Eigen/Eigenvalues>
 #include <Eigen/QR>
 
@@ -24,10 +24,6 @@ BasicLaserOdometry::BasicLaserOdometry(float scanPeriod, size_t maxIterations) :
    _maxIterations(maxIterations),
    _deltaTAbort(0.1),
    _deltaRAbort(0.1),
-   _cornerPointsSharp(new pcl::PointCloud<pcl::PointXYZI>()),
-   _cornerPointsLessSharp(new pcl::PointCloud<pcl::PointXYZI>()),
-   _surfPointsFlat(new pcl::PointCloud<pcl::PointXYZI>()),
-   _surfPointsLessFlat(new pcl::PointCloud<pcl::PointXYZI>()),
    _laserCloud(new pcl::PointCloud<pcl::PointXYZI>()),
    _lastCornerCloud(new pcl::PointCloud<pcl::PointXYZI>()),
    _lastSurfaceCloud(new pcl::PointCloud<pcl::PointXYZI>()),
@@ -35,58 +31,27 @@ BasicLaserOdometry::BasicLaserOdometry(float scanPeriod, size_t maxIterations) :
    _coeffSel(new pcl::PointCloud<pcl::PointXYZI>())
 {}
 
-
-
-void BasicLaserOdometry::transformToStart(const pcl::PointXYZI& pi, pcl::PointXYZI& po)
+void BasicLaserOdometry::transformToGlobal(const pcl::PointCloud<pcl::PointXYZI>& ori, pcl::PointCloud<pcl::PointXYZI>::Ptr& out)
 {
-   float s = (1.f / _scanPeriod) * (pi.intensity - int(pi.intensity));
-
-   po.x = pi.x - s * _transform.pos.x();
-   po.y = pi.y - s * _transform.pos.y();
-   po.z = pi.z - s * _transform.pos.z();
-   po.intensity = pi.intensity;
-
-   Angle rx = -s * _transform.rot_x.rad();
-   Angle ry = -s * _transform.rot_y.rad();
-   Angle rz = -s * _transform.rot_z.rad();
-   rotateZXY(po, rz, rx, ry);
-}
-
-
-
-size_t BasicLaserOdometry::transformToEnd(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud)
-{
-   size_t cloudSize = cloud->points.size();
-
-   for (size_t i = 0; i < cloudSize; i++)
+   out->clear();
+   for(int i = 0; i < ori.points.size(); i++)
    {
-      pcl::PointXYZI& point = cloud->points[i];
+      pcl::PointXYZI newPoint;
+      pcl::PointXYZI po;
+      newPoint.x = ori.points[i].z;
+      newPoint.y = ori.points[i].x;
+      newPoint.z = ori.points[i].y;
+      newPoint.intensity = ori.points[i].intensity;
 
-      float s = (1.f / _scanPeriod) * (point.intensity - int(point.intensity));
+      rotateZXY(newPoint, cur_pose_estimated.yaw, cur_pose_estimated.pitch, cur_pose_estimated.roll);
 
-      point.x -= s * _transform.pos.x();
-      point.y -= s * _transform.pos.y();
-      point.z -= s * _transform.pos.z();
-      point.intensity = int(point.intensity);
-
-      Angle rx = -s * _transform.rot_x.rad();
-      Angle ry = -s * _transform.rot_y.rad();
-      Angle rz = -s * _transform.rot_z.rad();
-      rotateZXY(point, rz, rx, ry);
-      rotateYXZ(point, _transform.rot_y, _transform.rot_x, _transform.rot_z);
-
-      point.x += _transform.pos.x() - _imuShiftFromStart.x();
-      point.y += _transform.pos.y() - _imuShiftFromStart.y();
-      point.z += _transform.pos.z() - _imuShiftFromStart.z();
-
-      rotateZXY(point, _imuRollStart, _imuPitchStart, _imuYawStart);
-      rotateYXZ(point, -_imuYawEnd, -_imuPitchEnd, -_imuRollEnd);
+      po.x = newPoint.y + cur_pose_estimated.y;
+      po.y = newPoint.z + cur_pose_estimated.z;
+      po.z = newPoint.x + cur_pose_estimated.x;
+      po.intensity = newPoint.intensity;
+      out->points.push_back(po);
    }
-
-   return cloudSize;
-}
-
-
+ }
 
 void BasicLaserOdometry::pluginIMURotation(const Angle& bcx, const Angle& bcy, const Angle& bcz,
                                            const Angle& blx, const Angle& bly, const Angle& blz,
@@ -179,23 +144,85 @@ void BasicLaserOdometry::accumulateRotation(Angle cx, Angle cy, Angle cz,
 }
 
 
-void BasicLaserOdometry::process(pcl::PointCloud<pcl::PointXYZ>& _laserCloudIn,
-                                const Time& scanTime,
+void BasicLaserOdometry::interpolate(const vector<NAVDATA>& data,
+                            const long long& time,
+                            NAVDATA& result)
+{
+    int pos = 0;
+    int length = data.size();
+    for(;pos < length && data[pos].millisec < time; pos++);
+    if(pos == length){
+        result = data[--pos];
+        return;
+    }
+    if(length == 1){
+        result = data[0];
+        return;
+    }
+    float ratio = 1.0 * (time - data[pos-1].millisec) / (data[pos].millisec - data[pos-1].millisec);
+    float invRatio = 1 - ratio;
+    result.millisec = time;
+    result.roll = invRatio * data[pos-1].roll + ratio * data[pos].roll;
+    result.pitch = invRatio * data[pos-1].pitch + ratio * data[pos].pitch;
+    result.yaw = invRatio * data[pos-1].yaw + ratio * data[pos].yaw;
+    result.x = invRatio * data[pos-1].x + ratio * data[pos].x;
+    result.y = invRatio * data[pos-1].y + ratio * data[pos].y;
+    result.z = invRatio * data[pos-1].z + ratio * data[pos].z;
+};
+
+
+Eigen::Affine3f BasicLaserOdometry::NAVDATA2Transform(const NAVDATA &nav) {
+   Eigen::Affine3f transform_ = Eigen::Affine3f::Identity();
+   transform_.translation() << nav.x, nav.y, nav.z;
+   transform_.rotate(Eigen::AngleAxisf (nav.roll, Eigen::Vector3f::UnitX()));
+   transform_.rotate(Eigen::AngleAxisf (nav.pitch, Eigen::Vector3f::UnitY()));
+   transform_.rotate(Eigen::AngleAxisf (nav.yaw, Eigen::Vector3f::UnitZ()));
+   return transform_;
+}
+
+NAVDATA BasicLaserOdometry::Transform2NAVDATA(const Eigen::Affine3f &tranform_) {
+   float x, y, z, roll, pitch, yaw;
+   pcl::getTranslationAndEulerAngles(tranform_,x,y,z,roll,pitch,yaw);
+   NAVDATA nav_;
+   nav_.x = x; nav_.y = y; nav_.z = z; nav_.roll = roll; nav_.pitch = pitch; nav_.yaw = yaw;
+   return nav_;
+}
+
+void BasicLaserOdometry::transformToLast(const NAVDATA &last, const NAVDATA &cur, NAVDATA &diff) {
+   Eigen::Affine3f transform_last = NAVDATA2Transform(last);
+   Eigen::Affine3f transform_cur = NAVDATA2Transform(cur);
+   Eigen::Affine3f transform_local = transform_cur.inverse() * transform_last;
+   diff = Transform2NAVDATA(transform_local);
+}
+
+void BasicLaserOdometry::transformToGlobal(const NAVDATA &last, const NAVDATA &diff, NAVDATA &cur) {
+   Eigen::Affine3f transform_last = NAVDATA2Transform(last);
+   Eigen::Affine3f transform_local = NAVDATA2Transform(diff);
+   Eigen::Affine3f transform_cur_inv = transform_local * transform_last.inverse();
+   Eigen::Affine3f transform_cur= transform_cur_inv.inverse();
+   cur = Transform2NAVDATA(transform_cur);
+}
+
+void BasicLaserOdometry::process(const std::vector<NAVDATA>& nav,
+                                const long long& scanTime,
                                 pcl::PointCloud<pcl::PointXYZI>& cornerPointsSharp,
                                 pcl::PointCloud<pcl::PointXYZI>& cornerPointsLessSharp,
                                 pcl::PointCloud<pcl::PointXYZI>& surfPointsLessFlat,
                                 pcl::PointCloud<pcl::PointXYZI>& surfPointsFlat)
 {
+   /* cornerPointSharp和surfPointFlat用于遍历特征点优化 */
+   /* cornerPointLessSharp和surfPointLessFlat用于初始化KD树 */
+
+   /* 如果系统第一次运行, 使用_surfPointLessFlat和_cornerPointLessSharp初始化对应KDTree */
    if (!_systemInited)
    {
-      _cornerPointsLessSharp.swap(_lastCornerCloud);
-      _surfPointsLessFlat.swap(_lastSurfaceCloud);
+      cornerPointsLessSharp.swap(*_lastCornerCloud);
+      surfPointsLessFlat.swap(*_lastSurfaceCloud);
 
       _lastCornerKDTree.setInputCloud(_lastCornerCloud);
       _lastSurfaceKDTree.setInputCloud(_lastSurfaceCloud);
 
-      _transformSum.rot_x += _imuPitchStart;
-      _transformSum.rot_z += _imuRollStart;
+      interpolate(nav,scanTime,_transformSum); /* 原程序中在此处仅适用imu信息中的pich和roll初始化_transformSum */
 
       _systemInited = true;
       return;
@@ -206,8 +233,9 @@ void BasicLaserOdometry::process(pcl::PointCloud<pcl::PointXYZ>& _laserCloudIn,
    Eigen::Matrix<float, 6, 6> matP;
 
    _frameCount++;
-   _transform.pos -= _imuVeloFromStart * _scanPeriod;
-
+   NAVDATA transformGlobal; /* 当前帧全局坐标 */
+   interpolate(nav,scanTime,transformGlobal); /* 使用imu位姿信息初始化_transform */
+   transformToLast(_transformSum,transformGlobal,_transform);
 
    size_t lastCornerCloudSize = _lastCornerCloud->points.size();
    size_t lastSurfaceCloudSize = _lastSurfaceCloud->points.size();
@@ -218,9 +246,9 @@ void BasicLaserOdometry::process(pcl::PointCloud<pcl::PointXYZ>& _laserCloudIn,
       std::vector<float> pointSearchSqDis(1);
       std::vector<int> indices;
 
-      pcl::removeNaNFromPointCloud(*_cornerPointsSharp, *_cornerPointsSharp, indices);
-      size_t cornerPointsSharpNum = _cornerPointsSharp->points.size();
-      size_t surfPointsFlatNum = _surfPointsFlat->points.size();
+//      pcl::removeNaNFromPointCloud(cornerPointsSharp, cornerPointsSharp, indices);
+      size_t cornerPointsSharpNum = cornerPointsSharp.points.size();
+      size_t surfPointsFlatNum = surfPointsFlat.points.size();
 
       _pointSearchCornerInd1.resize(cornerPointsSharpNum);
       _pointSearchCornerInd2.resize(cornerPointsSharpNum);
@@ -228,46 +256,20 @@ void BasicLaserOdometry::process(pcl::PointCloud<pcl::PointXYZ>& _laserCloudIn,
       _pointSearchSurfInd2.resize(surfPointsFlatNum);
       _pointSearchSurfInd3.resize(surfPointsFlatNum);
 
-      int mode_debug = 3; // 0-record points, 1-record delta, 2-record ld2, pd2, ls, ps, 3-don't know
-      FILE *fp; 
-      FILE *fp_ld2, *fp_pd2, *fp_ls, *fp_ps;
-      char filename[255];
-      if(mode_debug==1) {
-         sprintf(filename, "/home/sukie/Desktop/data/delta-%ld.txt",_frameCount);
-         fp=fopen(filename,"w");
-       }
-
       for (size_t iterCount = 0; iterCount < _maxIterations; iterCount++)
       {
-         //printf("Iteration %d:\n",iterCount);
-         //printf("Number of Corner Points: %d\n",cornerPointsSharpNum);
-         //printf("Number of Planar Points: %d\n",surfPointsFlatNum);
          pcl::PointXYZI pointSel, pointProj, tripod1, tripod2, tripod3;
-         if(mode_debug==0){
-            sprintf(filename, "/home/sukie/Desktop/data/log-%ld-%d-%lld.txt",_frameCount,iterCount, pointcloudTime);
-            fp=fopen(filename,"w");
-         }
-         if(mode_debug==2){
-            sprintf(filename, "/home/sukie/Desktop/data/ld2-%ld-%d.txt",_frameCount,iterCount);
-            fp_ld2=fopen(filename,"w");
-            sprintf(filename, "/home/sukie/Desktop/data/pd2-%ld-%d.txt",_frameCount,iterCount);
-            fp_pd2=fopen(filename,"w");
-            sprintf(filename, "/home/sukie/Desktop/data/ls-%ld-%d.txt",_frameCount,iterCount);
-            fp_ls=fopen(filename,"w");
-            sprintf(filename, "/home/sukie/Desktop/data/ps-%ld-%d.txt",_frameCount,iterCount);
-            fp_ps=fopen(filename,"w");
-         }
                  
-         _laserCloudOri->clear();
-         _coeffSel->clear();
-
+         _laserCloudOri->clear(); /* 用于优化的特征点集 */
+         _coeffSel->clear(); /* 用于优化的参数 */
+//         pcl::transformPointCloud(cornerPointsSharp, _cornerPointsSharp, NAVDATA2Transform(_transform));
          for (int i = 0; i < cornerPointsSharpNum; i++)
          {
-            transformToStart(_cornerPointsSharp->points[i], pointSel);
+            pointSel = pcl::transformPoint(cornerPointsSharp.points[i],NAVDATA2Transform(_transform));
 
             if (iterCount % 5 == 0)
             {
-               pcl::removeNaNFromPointCloud(*_lastCornerCloud, *_lastCornerCloud, indices);
+//               pcl::removeNaNFromPointCloud(*_lastCornerCloud, *_lastCornerCloud, indices);
                _lastCornerKDTree.nearestKSearch(pointSel, 1, pointSearchInd, pointSearchSqDis);
 
                int closestPointInd = -1, minPointInd2 = -1;
@@ -324,13 +326,6 @@ void BasicLaserOdometry::process(pcl::PointCloud<pcl::PointXYZ>& _laserCloudIn,
                tripod1 = _lastCornerCloud->points[_pointSearchCornerInd1[i]];
                tripod2 = _lastCornerCloud->points[_pointSearchCornerInd2[i]];
 
-               // Debug Display
-               if(mode_debug == 0){
-                  fprintf(fp,"Origin, %.3f, %.3f, %.3f, %.6f, ", pointSel.x, pointSel.y, pointSel.z, pointSel.intensity);
-                  fprintf(fp,"Corner1, %.3f, %.3f, %.3f, %.6f, ",tripod1.x,tripod1.y,tripod1.z,tripod1.intensity);
-                  fprintf(fp,"Corner2, %.3f, %.3f, %.3f, %.6f\n",tripod2.x,tripod2.y,tripod2.z,tripod2.intensity);
-               }
-
                float x0 = pointSel.x;
                float y0 = pointSel.y;
                float z0 = pointSel.z;
@@ -361,10 +356,6 @@ void BasicLaserOdometry::process(pcl::PointCloud<pcl::PointXYZ>& _laserCloudIn,
 
                float ld2 = a012 / l12; // Eq. (2)
 
-               if(mode_debug == 2){
-                  fprintf(fp_ld2, "%.6f\n",ld2);
-               }
-
                // TODO: Why writing to a variable that's never read?
                pointProj = pointSel;
                pointProj.x -= la * ld2;
@@ -377,10 +368,6 @@ void BasicLaserOdometry::process(pcl::PointCloud<pcl::PointXYZ>& _laserCloudIn,
                   s = 1 - 1.8f * fabs(ld2);
                }
 
-               if(mode_debug == 2){
-                  fprintf(fp_ls, "%.6f\n",s); // distance points to line
-               }
-
                coeff.x = s * la;
                coeff.y = s * lb;
                coeff.z = s * lc;
@@ -388,7 +375,7 @@ void BasicLaserOdometry::process(pcl::PointCloud<pcl::PointXYZ>& _laserCloudIn,
 
                if (s > 0.1 && ld2 != 0)
                {
-                  _laserCloudOri->push_back(_cornerPointsSharp->points[i]);
+                  _laserCloudOri->push_back(cornerPointsSharp.points[i]);
                   _coeffSel->push_back(coeff);
                }
             }
@@ -396,7 +383,7 @@ void BasicLaserOdometry::process(pcl::PointCloud<pcl::PointXYZ>& _laserCloudIn,
 
          for (int i = 0; i < surfPointsFlatNum; i++)
          {
-            transformToStart(_surfPointsFlat->points[i], pointSel);
+            pointSel = pcl::transformPoint(surfPointsFlat.points[i],NAVDATA2Transform(_transform));
 
             if (iterCount % 5 == 0)
             {
@@ -473,14 +460,6 @@ void BasicLaserOdometry::process(pcl::PointCloud<pcl::PointXYZ>& _laserCloudIn,
                tripod2 = _lastSurfaceCloud->points[_pointSearchSurfInd2[i]];
                tripod3 = _lastSurfaceCloud->points[_pointSearchSurfInd3[i]];
 
-               // Debug Display
-               if(mode_debug == 0){
-                  fprintf(fp,"Origin, %.3f, %.3f, %.3f, %.6f, ", pointSel.x, pointSel.y, pointSel.z, pointSel.intensity);
-                  fprintf(fp,"Planar1, %.3f, %.3f, %.3f, %.6f, ",tripod1.x,tripod1.y,tripod1.z,tripod1.intensity);
-                  fprintf(fp,"Planar2, %.3f, %.3f, %.3f, %.6f, ",tripod2.x,tripod2.y,tripod2.z,tripod2.intensity);
-                  fprintf(fp,"Planar3, %.3f, %.3f, %.3f, %.6f\n",tripod3.x,tripod3.y,tripod3.z,tripod3.intensity);
-               }
-
                float pa = (tripod2.y - tripod1.y) * (tripod3.z - tripod1.z)
                   - (tripod3.y - tripod1.y) * (tripod2.z - tripod1.z);
                float pb = (tripod2.z - tripod1.z) * (tripod3.x - tripod1.x)
@@ -497,10 +476,6 @@ void BasicLaserOdometry::process(pcl::PointCloud<pcl::PointXYZ>& _laserCloudIn,
 
                float pd2 = pa * pointSel.x + pb * pointSel.y + pc * pointSel.z + pd; //Eq. (3)??
 
-               if(mode_debug == 2){
-                  fprintf(fp_pd2, "%.6f\n",pd2); //j distance points to surface
-               }
-
                // TODO: Why writing to a variable that's never read? Maybe it should be used afterwards?
                pointProj = pointSel;
                pointProj.x -= pa * pd2;
@@ -513,10 +488,6 @@ void BasicLaserOdometry::process(pcl::PointCloud<pcl::PointXYZ>& _laserCloudIn,
                   s = 1 - 1.8f * fabs(pd2) / sqrt(calcPointDistance(pointSel));
                }
 
-               if(mode_debug == 2){
-                  fprintf(fp_ps, "%.6f\n",s);
-               }
-
                coeff.x = s * pa;
                coeff.y = s * pb;
                coeff.z = s * pc;
@@ -524,7 +495,7 @@ void BasicLaserOdometry::process(pcl::PointCloud<pcl::PointXYZ>& _laserCloudIn,
 
                if (s > 0.1 && pd2 != 0)
                {
-                  _laserCloudOri->push_back(_surfPointsFlat->points[i]);
+                  _laserCloudOri->push_back(surfPointsFlat.points[i]);
                   _coeffSel->push_back(coeff);
                }
             }
@@ -536,6 +507,7 @@ void BasicLaserOdometry::process(pcl::PointCloud<pcl::PointXYZ>& _laserCloudIn,
             continue;
          }
 
+         /* 把点云配准和运动估计的问题转换为L-M优化求解的问题 */
          Eigen::Matrix<float, Eigen::Dynamic, 6> matA(pointSelNum, 6);
          Eigen::Matrix<float, 6, Eigen::Dynamic> matAt(6, pointSelNum);
          Eigen::Matrix<float, 6, 6> matAtA;
@@ -550,15 +522,16 @@ void BasicLaserOdometry::process(pcl::PointCloud<pcl::PointXYZ>& _laserCloudIn,
 
             float s = 1;
 
-            float srx = sin(s * _transform.rot_x.rad());
-            float crx = cos(s * _transform.rot_x.rad());
-            float sry = sin(s * _transform.rot_y.rad());
-            float cry = cos(s * _transform.rot_y.rad());
-            float srz = sin(s * _transform.rot_z.rad());
-            float crz = cos(s * _transform.rot_z.rad());
-            float tx = s * _transform.pos.x();
-            float ty = s * _transform.pos.y();
-            float tz = s * _transform.pos.z();
+            /* 此处将imu坐标系调整为激光坐标系 */
+            float srx = sin(s * _transform.roll); // 坐标变换5
+            float crx = cos(s * _transform.roll);
+            float sry = sin(s * _transform.pitch);
+            float cry = cos(s * _transform.pitch);
+            float srz = sin(s * _transform.yaw);
+            float crz = cos(s * _transform.yaw);
+            float tx = s * _transform.x;
+            float ty = s * _transform.y;
+            float tz = s * _transform.z;
 
             float arx = (-s * crx*sry*srz*pointOri.x + s * crx*crz*sry*pointOri.y + s * srx*sry*pointOri.z
                          + s * tx*crx*sry*srz - s * ty*crx*crz*sry - s * tz*srx*sry) * coeff.x
@@ -645,26 +618,22 @@ void BasicLaserOdometry::process(pcl::PointCloud<pcl::PointXYZ>& _laserCloudIn,
             matX = matP * matX2;
          }
 
-         _transform.rot_x = _transform.rot_x.rad() + matX(0, 0);
-         //_transform.rot_x = -0.0306;
-         _transform.rot_y = _transform.rot_y.rad() + matX(1, 0);
-         //_transform.rot_y = -4.5749;
-         _transform.rot_z = _transform.rot_z.rad() + matX(2, 0);
-         //_transform.rot_z = -0.0310;
-         _transform.pos.x() += matX(3, 0);
-         //_transform.pos.x() = 0.0; //-92.5619;
-         _transform.pos.y() += matX(4, 0);
-         //_transform.pos.y() = -83.8084;
-         _transform.pos.z() += matX(5, 0);
-         //_transform.pos.z() = 0.0; //-252.5517;
+         /* 此处将激光点坐标系调整回imu坐标系 */
+         NAVDATA _temp = _transform;
+         _transform.roll = _transform.roll + matX(0, 0);
+         _transform.pitch = _transform.pitch + matX(1, 0);
+         _transform.yaw = _transform.yaw + matX(2, 0);
+         _transform.x = _temp.x + matX(3, 0);
+         _transform.y = _temp.y + matX(4, 0);
+         _transform.z = _temp.z +matX(5, 0);
 
-         if (!pcl_isfinite(_transform.rot_x.rad())) _transform.rot_x = Angle();
-         if (!pcl_isfinite(_transform.rot_y.rad())) _transform.rot_y = Angle();
-         if (!pcl_isfinite(_transform.rot_z.rad())) _transform.rot_z = Angle();
+         if (!pcl_isfinite(_transform.pitch)) _transform.pitch = 0.0;
+         if (!pcl_isfinite(_transform.yaw)) _transform.yaw = 0.0;
+         if (!pcl_isfinite(_transform.roll)) _transform.roll = 0.0;
 
-         if (!pcl_isfinite(_transform.pos.x())) _transform.pos.x() = 0.0;
-         if (!pcl_isfinite(_transform.pos.y())) _transform.pos.y() = 0.0;
-         if (!pcl_isfinite(_transform.pos.z())) _transform.pos.z() = 0.0;
+         if (!pcl_isfinite(_transform.x)) _transform.x = 0.0;
+         if (!pcl_isfinite(_transform.y)) _transform.y = 0.0;
+         if (!pcl_isfinite(_transform.z)) _transform.z = 0.0;
          
          // Delta_R + Delta_T
          float deltaR = sqrt(pow(rad2deg(matX(0, 0)), 2) +
@@ -673,73 +642,27 @@ void BasicLaserOdometry::process(pcl::PointCloud<pcl::PointXYZ>& _laserCloudIn,
          float deltaT = sqrt(pow(matX(3, 0) * 100, 2) +
                              pow(matX(4, 0) * 100, 2) +
                              pow(matX(5, 0) * 100, 2));
-         
-         if(mode_debug == 1){
-            fprintf(fp,"%.6f, %.6f\n",deltaR, deltaT);
-         }
-         //printf("DetaRabort: %.6f, DeltaTabort: %.6f\n",_deltaRAbort,_deltaTAbort);
 
          if (deltaR < _deltaRAbort && deltaT < _deltaTAbort)
          {
-            if(mode_debug == 0) fclose(fp);
-            if(mode_debug == 2) {
-               fclose(fp_ld2);
-               fclose(fp_pd2);
-               fclose(fp_ls);
-               fclose(fp_ps);
-            }
             break;
          }
-        if(mode_debug == 0) fclose(fp);
-        if(mode_debug == 2) {
-           fclose(fp_ld2);
-           fclose(fp_pd2);
-           fclose(fp_ls);
-           fclose(fp_ps);
-         }
+
+         std::cout << "iterCount -> " << iterCount << ", deltaR -> " << deltaR << ", deltaT -> " << deltaT << std::endl;
+
       } // end of iterations
-      if(mode_debug == 1) fclose(fp);
-   }
+   } /* for循环终止 */
 
-   Angle rx, ry, rz;
-   //printf("Validation: %.6f, %.6f, %.6f, %.6f, %.6f, %.6f\n",_transformSum.rot_x,_transformSum.rot_y,_transformSum.rot_z,_transformSum.pos.x(),_transformSum.pos.y(),_transformSum.pos.z());
-   printf("Validation: %.6f\n",_transformSum.pos.x());
-   accumulateRotation(_transformSum.rot_x,
-                      _transformSum.rot_y,
-                      _transformSum.rot_z,
-                      -_transform.rot_x,
-                      -_transform.rot_y.rad() * 1.05,
-                      -_transform.rot_z,
-                      rx, ry, rz);
+   transformToGlobal(_transformSum, _transform, _transformSum);
 
-   Vector3 v(_transform.pos.x() - _imuShiftFromStart.x(),
-             _transform.pos.y() - _imuShiftFromStart.y(),
-             _transform.pos.z() * 1.05 - _imuShiftFromStart.z());
-   rotateZXY(v, rz, rx, ry);
-   Vector3 trans = _transformSum.pos - v;
+   std::cout << "transfomGlobal - > " << transformGlobal.x <<", " << transformGlobal.y << ", " << transformGlobal.z\
+             << ", " << transformGlobal.roll << ", " << transformGlobal.pitch << ", " << transformGlobal.yaw << std::endl;
+   std::cout << "transformSum   - > " << _transformSum.x << ", " << _transformSum.y << ", " << _transformSum.z\
+             << ", " <<  _transformSum.roll << ", " << _transform.pitch << ", " << _transform.yaw << std::endl;
 
-   pluginIMURotation(rx, ry, rz,
-                     _imuPitchStart, _imuYawStart, _imuRollStart,
-                     _imuPitchEnd, _imuYawEnd, _imuRollEnd,
-                     rx, ry, rz);
-
-   /* rx, ry, rz, trans */
-   //Vector3 new_trans(trans.x(),-83.8084,trans.z());
-   Vector3 new_trans(-92.5919,-83.8084,-252.5517);
-   Angle gt_rx(float(0.0306));
-   Angle gt_ry(float(-4.5759));
-   Angle gt_rz(float(-0.0310));
-
-   _transformSum.rot_x = rx;
-   _transformSum.rot_y = ry;
-   _transformSum.rot_z = rz;
-   _transformSum.pos = trans;
-
-   transformToEnd(_cornerPointsLessSharp);
-   transformToEnd(_surfPointsLessFlat);
-
-   _cornerPointsLessSharp.swap(_lastCornerCloud);
-   _surfPointsLessFlat.swap(_lastSurfaceCloud);
+   /* 退出前环境保存, 将当前_cornerPointLessSharp及_surfPointLessFlat放入KDTree */
+   cornerPointsLessSharp.swap(*_lastCornerCloud);
+   surfPointsLessFlat.swap(*_lastSurfaceCloud);
 
    lastCornerCloudSize = _lastCornerCloud->points.size();
    lastSurfaceCloudSize = _lastSurfaceCloud->points.size();
@@ -751,7 +674,6 @@ void BasicLaserOdometry::process(pcl::PointCloud<pcl::PointXYZ>& _laserCloudIn,
    }
 
 }
-
 
 
 } // end namespace loam

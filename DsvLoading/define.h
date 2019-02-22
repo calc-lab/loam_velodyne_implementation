@@ -1,16 +1,7 @@
 #pragma once
-#ifndef VECTOR_H
-#define VECTOR_H
+
 #include <vector>
-#endif
-
-#ifndef CSTDIO_H
-#define CSTDIO_H
-
 #include <cstdio>
-
-#endif
-
 #include <iomanip>
 #include <cstdlib>
 #include <cstring>

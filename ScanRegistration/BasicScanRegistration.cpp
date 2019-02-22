@@ -32,9 +32,6 @@ void BasicScanRegistration::processScanlines(const long long& scanTime,
         pcl::PointCloud<pcl::PointXYZI>& surfPointsLessFlat,
         pcl::PointCloud<pcl::PointXYZI>& surfPointsFlat)
 {
-  // reset internal buffers and set IMU start state based on current scan time
-//  reset(scanTime);
-
   // construct sorted full resolution cloud
   size_t cloudSize = 0;
   for (int i = 0; i < laserCloudScans.size(); i++) {

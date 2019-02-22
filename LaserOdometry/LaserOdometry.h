@@ -13,16 +13,13 @@
 namespace loam
 {
 
-  /** \brief Implementation of the LOAM laser odometry component.
-   *
-   */
   class LaserOdometry : public BasicLaserOdometry
   {
   public:
     explicit LaserOdometry(float scanPeriod = 0.1, uint16_t ioRatio = 2, size_t maxIterations = 25);
 
-    void process(pcl::PointCloud<pcl::PointXYZ>& laserCloudIn,
-            const Time& scanTime,
+    void process(const std::vector<NAVDATA>& nav,
+            const long long& scanTime,
             pcl::PointCloud<pcl::PointXYZI>&,
             pcl::PointCloud<pcl::PointXYZI>&,
             pcl::PointCloud<pcl::PointXYZI>&,
@@ -30,7 +27,7 @@ namespace loam
 
   private:
     uint16_t _ioRatio;       ///< ratio of input to output frames
-
+    long _frameCount;
   };
 
 } // end namespace loam

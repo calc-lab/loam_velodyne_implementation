@@ -2,10 +2,12 @@
 #include "nanoflann_pcl.h"
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
+#include <pcl/common/transforms.h>
 #include <stdio.h>
 
 #include "Twist.h"
 #include "../ScanRegistration/time_utils.h"
+#include "./DsvLoading/define.h"
 
 namespace loam
 {
@@ -19,8 +21,8 @@ namespace loam
     explicit BasicLaserOdometry(float scanPeriod = 0.1, size_t maxIterations = 25);
 
     /** \brief Try to process buffered data. */
-    void process(pcl::PointCloud<pcl::PointXYZ>& laserCloudIn,
-            const Time& scanTime,
+    void process(const std::vector<NAVDATA>& nav,
+            const long long& scanTime,
             pcl::PointCloud<pcl::PointXYZI>&,
             pcl::PointCloud<pcl::PointXYZI>&,
             pcl::PointCloud<pcl::PointXYZI>&,
@@ -30,7 +32,20 @@ namespace loam
 
     long long pointcloudTime;
   private:
-    void transformToStart(const pcl::PointXYZI& pi, pcl::PointXYZI& po);
+    void interpolate(const vector<NAVDATA>& data, const long long& time, NAVDATA& result);
+
+    /* 计算当前帧坐标系到上一帧坐标系的变换 */
+    void transformToLast(const NAVDATA& last, const NAVDATA& cur, NAVDATA& diff);
+
+    /* 计算当前帧坐标系到全局坐标系的变换 */
+    void transformToGlobal(const NAVDATA& last, const NAVDATA& diff, NAVDATA& cur);
+
+    Eigen::Affine3f NAVDATA2Transform(const NAVDATA& nav);
+    NAVDATA Transform2NAVDATA(const Eigen::Affine3f& tranform_);
+
+    /* 沿用旧函数名, 将点云投影到上一帧对应坐标系 */
+//    void transformToStart(const pcl::PointXYZI& pi, pcl::PointXYZI& po);
+    void transformToGlobal(const pcl::PointCloud<pcl::PointXYZI>& ori, pcl::PointCloud<pcl::PointXYZI>::Ptr& out);
 
     void pluginIMURotation(const Angle& bcx, const Angle& bcy, const Angle& bcz,
                            const Angle& blx, const Angle& bly, const Angle& blz,
@@ -60,10 +75,6 @@ namespace loam
     nanoflann::KdTreeFLANN<pcl::PointXYZI> _lastCornerKDTree;   ///< last corner cloud KD-tree
     nanoflann::KdTreeFLANN<pcl::PointXYZI> _lastSurfaceKDTree;  ///< last surface cloud KD-tree
 
-    pcl::PointCloud<pcl::PointXYZI>::Ptr _cornerPointsSharp;      ///< sharp corner points cloud
-    pcl::PointCloud<pcl::PointXYZI>::Ptr _cornerPointsLessSharp;  ///< less sharp corner points cloud
-    pcl::PointCloud<pcl::PointXYZI>::Ptr _surfPointsFlat;         ///< flat surface points cloud
-    pcl::PointCloud<pcl::PointXYZI>::Ptr _surfPointsLessFlat;     ///< less flat surface points cloud
     pcl::PointCloud<pcl::PointXYZI>::Ptr _laserCloud;             ///< full resolution cloud
 
     std::vector<int> _pointSearchCornerInd1;    ///< first corner point search index buffer
@@ -73,8 +84,10 @@ namespace loam
     std::vector<int> _pointSearchSurfInd2;    ///< second surface point search index buffer
     std::vector<int> _pointSearchSurfInd3;    ///< third surface point search index buffer
 
-    Twist _transform;     ///< optimized pose transformation
-    Twist _transformSum;  ///< accumulated optimized pose transformation
+    NAVDATA _transform;     ///< optimized pose transformation
+    NAVDATA _transformSum;  ///< accumulated optimized pose transformation
+
+    NAVDATA cur_pose_estimated;
 
     Angle _imuRollStart, _imuPitchStart, _imuYawStart;
     Angle _imuRollEnd, _imuPitchEnd, _imuYawEnd;

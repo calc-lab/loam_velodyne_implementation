@@ -173,20 +173,16 @@ void BasicLaserMapping::transformUpdate()
 
 void BasicLaserMapping::pointAssociateToMap(const pcl::PointXYZI& pi, pcl::PointXYZI& po)
 {
-   pcl::PointXYZI newPoint;
-   newPoint.x = pi.z;
-   newPoint.y = pi.x;
-   newPoint.z = pi.y;
-   newPoint.intensity = pi.intensity;
+   pcl::PointXYZI newPoint = pi;
 
 //   rotateZXY(newPoint, cur_state.yaw, cur_state.roll, cur_state.pitch);
 //   rotateZXY(newPoint, cur_state.roll, cur_state.pitch, cur_state.yaw);
    rotateZXY(newPoint, cur_state.yaw, 0, 0);
 //   rotateZXY(po, _transformTobeMapped.rot_z, _transformTobeMapped.rot_x, _transformTobeMapped.rot_y);
 
-   po.x = newPoint.y + cur_state.y;
-   po.y = newPoint.z + cur_state.z;
-   po.z = newPoint.x + cur_state.x;
+   po.x = newPoint.x + cur_state.x;
+   po.y = newPoint.y + cur_state.y;
+   po.z = newPoint.z + cur_state.z;
 }
 
 
@@ -266,8 +262,6 @@ void BasicLaserMapping::process(const pcl::PointCloud<pcl::PointXYZI>::Ptr laser
 //   transformAssociateToMap();
 
    pcl::PointCloud<pcl::PointXYZI> laserCloudInDSStack;
-
-   std::cout << "nav data -> " << cur_state.x << " " << cur_state.y << std::endl;
 
    for (auto const& pt : laserCloudInDS->points)
    {

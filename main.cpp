@@ -3,6 +3,8 @@
 #include "./LaserOdometry/LaserOdometry.h"
 #include "./LaserMapping/LaserMapping.h"
 
+//#define VIEW_MAP
+
 TRANSINFO	calibInfo;
 
 FILE    *dfp;
@@ -25,15 +27,23 @@ std::list<point2d> trajList;
 /* loam部分变量定义 */
 pcl::PointCloud<pcl::PointXYZI>::Ptr laserCloudIn(new pcl::PointCloud<pcl::PointXYZI>); /* 单帧原始激光数据 */
 long long pointcloudTime; /* 单帧原始激光时间戳 */
-pcl::visualization::PCLVisualizer viewer("PointCloud Viewer"); /* 单帧原始激光数据可视化窗口 */
+
+#ifdef VIEW_MAP
 pcl::visualization::PCLVisualizer map_viewer("Map Viewer");
-bool is_first_visualization = true;
 bool is_first_visualization_map = true;
+#else
+pcl::visualization::PCLVisualizer viewer("PointCloud Viewer"); /* 单帧原始激光数据可视化窗口 */
+bool is_first_visualization = true;
+#endif
 
 pcl::PointCloud<pcl::PointXYZI> cornerPointsSharp;      ///< sharp corner points cloud
 pcl::PointCloud<pcl::PointXYZI> cornerPointsLessSharp;  ///< less sharp corner points cloud
 pcl::PointCloud<pcl::PointXYZI> surfPointsFlat;         ///< flat surface points cloud
 pcl::PointCloud<pcl::PointXYZI> surfPointsLessFlat;     ///< less flat surface points cloud
+
+loam::LaserOdometry laserOdom(0.1);
+
+loam::LaserMapping laserMapping(0.1);
 
 pcl::PointCloud<pcl::PointXYZI>::Ptr laserCloudMap(new pcl::PointCloud<pcl::PointXYZI>); /* 激光地图 */
 
@@ -231,7 +241,8 @@ void ConvertPointCloudType ()
                 if (!p->i)
                     continue;
                 pcl::PointXYZI single_laserCloudIn;
-                single_laserCloudIn.x = p->y; single_laserCloudIn.y = p->z - 2.6; single_laserCloudIn.z = p->x; single_laserCloudIn.intensity = 1.;
+//                single_laserCloudIn.x = p->y; single_laserCloudIn.y = p->z; single_laserCloudIn.z = p->x; single_laserCloudIn.intensity = 1.;
+                single_laserCloudIn.x = p->x; single_laserCloudIn.y = p->y; single_laserCloudIn.z = p->z; single_laserCloudIn.intensity = 1.;
                 laserCloudIn->push_back(single_laserCloudIn);
             }
         }
@@ -239,36 +250,10 @@ void ConvertPointCloudType ()
     pointcloudTime = onefrm->dsv[0].millisec;
 }
 
-void visualizePointCloud ()
-{
-    viewer.setBackgroundColor(0, 0, 0);
-    // TODO: 将可视化对象从surPointsLessFlat改回laserCloudIn
-    pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZI> red(cornerPointsSharp.makeShared(), 255, 9, 0);
-    pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZI> green(surfPointsFlat.makeShared(), 0, 255, 0);
-    pcl::visualization::PointCloudColorHandlerGenericField<pcl::PointXYZI> handler(surfPointsLessFlat.makeShared(),"intensity");
-    if(is_first_visualization)
-    {
-        viewer.addPointCloud<pcl::PointXYZI>(surfPointsLessFlat.makeShared(), "Point Cloud");
-        viewer.addPointCloud<pcl::PointXYZI>(cornerPointsSharp.makeShared(), red, "CornerPointSharp");
-        viewer.addPointCloud<pcl::PointXYZI>(surfPointsFlat.makeShared(), green, "surfPointsFlat");
-    }
-    else
-    {
-        viewer.updatePointCloud<pcl::PointXYZI>(surfPointsLessFlat.makeShared(), "Point Cloud");
-        viewer.updatePointCloud<pcl::PointXYZI>(cornerPointsSharp.makeShared(), red, "CornerPointSharp");
-        viewer.updatePointCloud<pcl::PointXYZI>(surfPointsFlat.makeShared(), green, "surfPointsFlat");
-    }
-    is_first_visualization = false;
-    viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "Point Cloud");
-    viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 10, "CornerPointSharp");
-    viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 10, "surfPointsFlat");
-
-    viewer.addCoordinateSystem(1.0);
-    viewer.spinOnce(100);
-}
 
 void visualizeMap ()
 {
+#ifdef VIEW_MAP
     map_viewer.setBackgroundColor(0, 0, 0);
     if(is_first_visualization_map)
     {
@@ -283,6 +268,37 @@ void visualizeMap ()
 
     map_viewer.addCoordinateSystem(1.0);
     map_viewer.spinOnce(100);
+#endif
+}
+
+
+void visualizePointCloud ()
+{
+#ifndef VIEW_MAP
+    viewer.setBackgroundColor(0, 0, 0);
+    pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZI> red(cornerPointsSharp.makeShared(), 255, 9, 0);
+    pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZI> green(surfPointsFlat.makeShared(), 0, 255, 0);
+    pcl::visualization::PointCloudColorHandlerGenericField<pcl::PointXYZI> handler(surfPointsLessFlat.makeShared(),"intensity");
+    if(is_first_visualization)
+    {
+        viewer.addPointCloud<pcl::PointXYZI>(surfPointsLessFlat.makeShared(), handler, "Point Cloud");
+        viewer.addPointCloud<pcl::PointXYZI>(cornerPointsSharp.makeShared(), red, "CornerPointSharp");
+        viewer.addPointCloud<pcl::PointXYZI>(surfPointsFlat.makeShared(), green, "surfPointsFlat");
+    }
+    else
+    {
+        viewer.updatePointCloud<pcl::PointXYZI>(surfPointsLessFlat.makeShared(), handler, "Point Cloud");
+        viewer.updatePointCloud<pcl::PointXYZI>(cornerPointsSharp.makeShared(), red, "CornerPointSharp");
+        viewer.updatePointCloud<pcl::PointXYZI>(surfPointsFlat.makeShared(), green, "surfPointsFlat");
+    }
+    is_first_visualization = false;
+    viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "Point Cloud");
+    viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 10, "CornerPointSharp");
+    viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 10, "surfPointsFlat");
+
+    viewer.addCoordinateSystem(1.0);
+    viewer.spinOnce(100);
+#endif
 }
 
 void ExtractFeatures ()
@@ -299,14 +315,14 @@ void ExtractFeatures ()
 
 void LaserOdometry ()
 {
-
+    laserOdom.process(nav, pointcloudTime, cornerPointsSharp, cornerPointsLessSharp, surfPointsLessFlat, surfPointsFlat);
 }
 
 void LaserMapping ()
 {
-    loam::LaserMapping laserMapping(0.1);
     laserMapping.process(laserCloudIn, pointcloudTime, nav, laserCloudMap);
-//    visualizeMap();
+
+    visualizeMap();
 }
 
 BOOL ReadOneDsvFrame ()
@@ -430,7 +446,7 @@ void DoProcessingOffline(/*P_CGQHDL64E_INFO_MSG *veloData, P_DWDX_INFO_MSG *dwdx
 	dFrmNo = 0;
 
     cv::namedWindow("l_dem");
-    cv::moveWindow("l_dem", WIDSIZ*2.3/PIXSIZ, 0);
+    cv::moveWindow("l_dem", WIDSIZ*5.6/PIXSIZ, 0);
 
     std::cout << "size of ONEDSVDATA: " << sizeof(ONEDSVDATA) << std::endl;
     std::cout << "size of MATRIX: " << sizeof(MATRIX) << std::endl;
@@ -457,7 +473,7 @@ void DoProcessingOffline(/*P_CGQHDL64E_INFO_MSG *veloData, P_DWDX_INFO_MSG *dwdx
 
         LaserOdometry();
 
-//        LaserMapping();
+        LaserMapping();
 
 		char WaitKey;
 		WaitKey = cvWaitKey(waitkeydelay);

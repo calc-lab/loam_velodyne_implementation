@@ -14,16 +14,19 @@ namespace loam
   using std::fabs;
   using std::pow;
 
+  LaserOdometry::LaserOdometry(float scanPeriod, uint16_t ioRatio, size_t maxIterations):
+  _frameCount(0)
+  {
+  }
 
-  void LaserOdometry::process(pcl::PointCloud<pcl::PointXYZ>& laserCloudIn,
-                              const Time& scanTime,
+  void LaserOdometry::process(const std::vector<NAVDATA>& nav,
+                              const long long& scanTime,
                               pcl::PointCloud<pcl::PointXYZI>& _cornerPointsSharp,
                               pcl::PointCloud<pcl::PointXYZI>& _cornerPointsLessSharp,
                               pcl::PointCloud<pcl::PointXYZI>& _surfPointsLessFlat,
                               pcl::PointCloud<pcl::PointXYZI>& _surfPointsFlat)
   {
-
-    BasicLaserOdometry::process(laserCloudIn, scanTime, _cornerPointsSharp, _cornerPointsLessSharp, _surfPointsLessFlat, _surfPointsFlat);
+    BasicLaserOdometry::process(nav, scanTime, _cornerPointsSharp, _cornerPointsLessSharp, _surfPointsLessFlat, _surfPointsFlat);
   }
 
 } // end namespace loam
