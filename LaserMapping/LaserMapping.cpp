@@ -237,11 +237,13 @@ bool LaserMapping::hasNewData()
 }
 */
 void LaserMapping::process(const pcl::PointCloud<pcl::PointXYZI>::Ptr laserCloudIn,
+    const pcl::PointCloud<pcl::PointXYZI>& cornerPointsSharp,
+    const pcl::PointCloud<pcl::PointXYZI>& surPointsFlat,
     const long long& scanTime,
     const std::vector<NAVDATA>& nav,
     pcl::PointCloud<pcl::PointXYZI>::Ptr& laserCloudMap)
 {
-   BasicLaserMapping::process(laserCloudIn, scanTime, nav, laserCloudMap);
+   BasicLaserMapping::process(laserCloudIn, cornerPointsSharp,  surPointsFlat, scanTime, nav, laserCloudMap);
 }
 
 } // end namespace loam

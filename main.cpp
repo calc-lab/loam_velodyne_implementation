@@ -320,7 +320,7 @@ void LaserOdometry ()
 
 void LaserMapping ()
 {
-    laserMapping.process(laserCloudIn, pointcloudTime, nav, laserCloudMap);
+    laserMapping.process(laserCloudIn, cornerPointsSharp, surfPointsFlat, pointcloudTime, nav, laserCloudMap);
 
     visualizeMap();
 }

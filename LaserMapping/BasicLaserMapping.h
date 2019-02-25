@@ -10,6 +10,7 @@
 #include <pcl/point_types.h>
 //#include <pcl/filters/voxel_grid.h>
 #include <pcl/keypoints/uniform_sampling.h>
+#include <pcl/common/transforms.h>
 
 namespace loam
 {
@@ -52,38 +53,14 @@ public:
 
    /** \brief Try to process buffered data. */
    void process(const pcl::PointCloud<pcl::PointXYZI>::Ptr,
+                const pcl::PointCloud<pcl::PointXYZI>& cornerPointsSharp,
+                const pcl::PointCloud<pcl::PointXYZI>& surPointsFlat,
                 const long long& scanTime,
                 const std::vector<NAVDATA>&,
                 pcl::PointCloud<pcl::PointXYZI>::Ptr&);
-
-   void updateIMU(IMUState2 const& newState);
-   void updateOdometry(double pitch, double yaw, double roll, double x, double y, double z);
-   void updateOdometry(Twist const& twist);
-
-   auto& laserCloud() { return *_laserCloudFullRes; }
-   auto& laserCloudCornerLast() { return *_laserCloudCornerLast; }
-   auto& laserCloudSurfLast() { return *_laserCloudSurfLast; }
-
-   void setScanPeriod(float val) { _scanPeriod = val; }
-   void setMaxIterations(size_t val) { _maxIterations = val; }
-   void setDeltaTAbort(float val) { _deltaTAbort = val; }
-   void setDeltaRAbort(float val) { _deltaRAbort = val; }
-
-   auto frameCount()    const { return _frameCount; }
-   auto scanPeriod()    const { return _scanPeriod; }
-   auto maxIterations() const { return _maxIterations; }
-   auto deltaTAbort()   const { return _deltaTAbort; }
-   auto deltaRAbort()   const { return _deltaRAbort; }
-
-   auto const& transformAftMapped()   const { return _transformAftMapped; }
-   auto const& transformBefMapped()   const { return _transformBefMapped; }
-   auto const& laserCloudSurroundDS() const { return *_laserCloudSurroundDS; }
-
-   bool hasFreshMap() const { return _downsizedMapCreated; }
-
-   long long pointcloudTime;
-
 private:
+    Eigen::Affine3f NAVDATA2Transform(const NAVDATA& nav);
+
    /** Run an optimization. */
    void optimizeTransformTobeMapped();
 
@@ -126,27 +103,28 @@ private:
    pcl::PointCloud<pcl::PointXYZI>::Ptr _laserCloudSurfLast;     ///< last surface points cloud
    pcl::PointCloud<pcl::PointXYZI>::Ptr _laserCloudFullRes;      ///< last full resolution cloud
 
-//   pcl::PointCloud<pcl::PointXYZI>::Ptr laserCloudInDSStack;
    pcl::PointCloud<pcl::PointXYZI>::Ptr _laserCloudCornerStack;
    pcl::PointCloud<pcl::PointXYZI>::Ptr _laserCloudSurfStack;
    pcl::PointCloud<pcl::PointXYZI>::Ptr _laserCloudCornerStackDS;  ///< down sampled
    pcl::PointCloud<pcl::PointXYZI>::Ptr _laserCloudSurfStackDS;    ///< down sampled
-
-   pcl::PointCloud<pcl::PointXYZI>::Ptr _laserCloudSurround;
-   pcl::PointCloud<pcl::PointXYZI>::Ptr _laserCloudSurroundDS;     ///< down sampled
-   pcl::PointCloud<pcl::PointXYZI>::Ptr _laserCloudCornerFromMap;
-   pcl::PointCloud<pcl::PointXYZI>::Ptr _laserCloudSurfFromMap;
-
-   pcl::PointCloud<pcl::PointXYZI> _laserCloudOri;
-   pcl::PointCloud<pcl::PointXYZI> _coeffSel;
 
    std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> _laserCloudCornerArray;
    std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> _laserCloudSurfArray;
    std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> _laserCloudCornerDSArray;  ///< down sampled
    std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> _laserCloudSurfDSArray;    ///< down sampled
 
-   std::vector<size_t> _laserCloudValidInd;
-   std::vector<size_t> _laserCloudSurroundInd;
+   std::vector<size_t> _laserCloudValidInd; /* 保存视野内点的索引 */
+   std::vector<size_t> _laserCloudSurroundInd; /* 保存视野外点的索引 */
+
+   pcl::PointCloud<pcl::PointXYZI>::Ptr _laserCloudCornerFromMap; /* 从map中找出的特征点 */
+   pcl::PointCloud<pcl::PointXYZI>::Ptr _laserCloudSurfFromMap; /* 从map中找出的特征点 */
+
+   pcl::PointCloud<pcl::PointXYZI>::Ptr _laserCloudSurround; /* 地图 */
+   pcl::PointCloud<pcl::PointXYZI>::Ptr _laserCloudSurroundDS;     ///< down sampled
+
+
+   pcl::PointCloud<pcl::PointXYZI> _laserCloudOri;
+   pcl::PointCloud<pcl::PointXYZI> _coeffSel;
 
    Twist _transformSum, _transformIncre, _transformTobeMapped, _transformBefMapped, _transformAftMapped;
 
@@ -157,6 +135,8 @@ private:
 //   pcl::VoxelGrid<pcl::PointXYZI> _downSizeFilterMap;      ///< voxel filter for down sizing accumulated map
 
    bool _downsizedMapCreated = false;
+
+   NAVDATA _transform;
 };
 
 } // end namespace loam

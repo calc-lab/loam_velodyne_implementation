@@ -56,6 +56,8 @@ public:
 
    /** \brief Try to process buffered data. */
    void process(const pcl::PointCloud<pcl::PointXYZI>::Ptr,
+           const pcl::PointCloud<pcl::PointXYZI>& cornerPointsSharp,
+           const pcl::PointCloud<pcl::PointXYZI>& surPointsFlat,
            const long long& scanTime,
            const std::vector<NAVDATA>&,
            pcl::PointCloud<pcl::PointXYZI>::Ptr&);
