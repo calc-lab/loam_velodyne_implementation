@@ -255,13 +255,14 @@ void visualizeMap ()
 {
 #ifdef VIEW_MAP
     map_viewer.setBackgroundColor(0, 0, 0);
+    pcl::visualization::PointCloudColorHandlerGenericField<pcl::PointXYZI> handler(laserCloudMap,"z");
     if(is_first_visualization_map)
     {
-        map_viewer.addPointCloud<pcl::PointXYZI>(laserCloudMap, "Map");
+        map_viewer.addPointCloud<pcl::PointXYZI>(laserCloudMap, handler, "Map");
     }
     else
     {
-        map_viewer.updatePointCloud<pcl::PointXYZI>(laserCloudMap, "Map");
+        map_viewer.updatePointCloud<pcl::PointXYZI>(laserCloudMap, handler, "Map");
     }
     is_first_visualization_map = false;
     map_viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "Map");
@@ -320,7 +321,7 @@ void LaserOdometry ()
 
 void LaserMapping ()
 {
-    laserMapping.process(laserCloudIn, cornerPointsSharp, surfPointsFlat, pointcloudTime, nav, laserCloudMap);
+    laserMapping.process(surfPointsLessFlat.makeShared(), cornerPointsSharp, surfPointsFlat, pointcloudTime, nav, laserCloudMap);
 
     visualizeMap();
 }

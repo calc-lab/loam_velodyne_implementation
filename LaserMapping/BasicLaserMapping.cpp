@@ -101,7 +101,7 @@ bool BasicLaserMapping::createDownsizedMap()
 
    // down size map cloud
    _laserCloudSurroundDS->clear();
-   DownsizePointCloud(*_laserCloudSurround, *_laserCloudSurroundDS, 3.0); // 降采样
+   DownsizePointCloud(*_laserCloudSurround, *_laserCloudSurroundDS, 1.0); // 降采样
    return true;
 }
 
@@ -185,10 +185,12 @@ void BasicLaserMapping::process(const pcl::PointCloud<pcl::PointXYZI>::Ptr laser
 
    pcl::PointCloud<pcl::PointXYZI> laserCloudInDSStack;
 
+   pcl::transformPointCloud(*laserCloudInDS, *laserCloudInDS, NAVDATA2Transform(cur_state));
+
    for (auto const& pt : laserCloudInDS->points)
    {
-      pointAssociateToMap(pt, pointSel_);
-      laserCloudMap->push_back(pointSel_);
+//      pointAssociateToMap(pt, pointSel_);
+      laserCloudMap->push_back(pt);
    }
    return;
 #endif
@@ -417,6 +419,7 @@ void BasicLaserMapping::process(const pcl::PointCloud<pcl::PointXYZI>::Ptr laser
    _laserCloudSurfFromMap->clear();
    for (auto const& ind : _laserCloudValidInd)
    {
+      std::cout << "we concentration -> " << ind << std::endl;
       *_laserCloudCornerFromMap += *_laserCloudCornerArray[ind];
       *_laserCloudSurfFromMap += *_laserCloudSurfArray[ind];
    }
@@ -427,20 +430,26 @@ void BasicLaserMapping::process(const pcl::PointCloud<pcl::PointXYZI>::Ptr laser
 
    // down sample feature stack clouds
    _laserCloudCornerStackDS->clear();
-   _laserCloudCornerStackDS = _laserCloudCornerStack;
    DownsizePointCloud(*_laserCloudCornerStack, *_laserCloudCornerStackDS, 3.0); // 降采样
+   pcl::copyPointCloud(*_laserCloudCornerStackDS, *_laserCloudCornerStack);
 
    size_t laserCloudCornerStackNum = _laserCloudCornerStackDS->size();
 
    _laserCloudSurfStackDS->clear();
-   _laserCloudSurfStackDS = _laserCloudSurfStack;
    DownsizePointCloud(*_laserCloudSurfStack, *_laserCloudSurfStackDS, 3.0); // 降采样
+   pcl::copyPointCloud(*_laserCloudSurfStackDS, *_laserCloudSurfStack);
+
    size_t laserCloudSurfStackNum = _laserCloudSurfStackDS->size();
 
    _laserCloudCornerStack->clear();
    _laserCloudSurfStack->clear();
 
+   std::cout << "_laserCloudCornerStackDS's size = " << _laserCloudCornerStackDS->points.size() << std::endl;
+   std::cout << "_laserCloudSurfStackDS's size = " << _laserCloudSurfStackDS->points.size() << std::endl;
+
    optimizeTransformTobeMapped();
+
+   std::cout << "transformSum2 -> " << _transformSum.x << ", " << _transformSum.y << ", " << _transformSum.z << ", " << _transformSum.roll << ", " << _transformSum.pitch << ", " << _transformSum.yaw << std::endl;
 
    // store down sized corner stack points in corresponding cube clouds
    for (int i = 0; i < laserCloudCornerStackNum; i++)
@@ -461,6 +470,8 @@ void BasicLaserMapping::process(const pcl::PointCloud<pcl::PointXYZI>::Ptr laser
           cubeK >= 0 && cubeK < _laserCloudDepth)
       {
          size_t cubeInd = cubeI + _laserCloudWidth * cubeJ + _laserCloudWidth * _laserCloudHeight * cubeK;
+         std::cout << "we push_back -> " << cubeI << ", " << cubeJ << ", " << cubeK << ", " << cubeInd << std::endl;
+         std::cout << "points -> " << pointSel.x << ", " << pointSel.y << ", " << pointSel.z << std::endl;
          _laserCloudCornerArray[cubeInd]->push_back(pointSel);
       }
    }
@@ -488,18 +499,25 @@ void BasicLaserMapping::process(const pcl::PointCloud<pcl::PointXYZI>::Ptr laser
    }
 
 //    down size all valid (within field of view) feature cube clouds
+   size_t before = 0, after = 0;
+   int cnt = 0;
+   std::cout << "_laserCloudValidInd's size = " << _laserCloudValidInd.size() << std::endl;
    for (auto const& ind : _laserCloudValidInd)
    {
+      cnt++;
+      before += _laserCloudCornerArray[ind]->size();
       _laserCloudCornerDSArray[ind]->clear();
-      DownsizePointCloud(*_laserCloudCornerArray[ind], *_laserCloudCornerDSArray[ind], 3.0); // 降采样
+      DownsizePointCloud(*_laserCloudCornerArray[ind], *_laserCloudCornerDSArray[ind], 0.1); // 降采样
 
       _laserCloudSurfDSArray[ind]->clear();
-      DownsizePointCloud(*_laserCloudSurfArray[ind], *_laserCloudSurfDSArray[ind], 3.0); // 降采样
+      DownsizePointCloud(*_laserCloudSurfArray[ind], *_laserCloudSurfDSArray[ind], 0.1); // 降采样
 
       // swap cube clouds for next processing
       _laserCloudCornerArray[ind].swap(_laserCloudCornerDSArray[ind]);
       _laserCloudSurfArray[ind].swap(_laserCloudSurfDSArray[ind]);
+      after += _laserCloudCornerArray[ind]->size();
    }
+   std::cout << "counter: before = " << before << ", " << "after = " << after << ", cnt = " << cnt << std::endl;
 
    _downsizedMapCreated = createDownsizedMap();
    laserCloudMap = _laserCloudSurroundDS;
@@ -512,8 +530,11 @@ nanoflann::KdTreeFLANN<pcl::PointXYZI> kdtreeSurfFromMap;
 
 void BasicLaserMapping::optimizeTransformTobeMapped()
 {
+   std::cout << "anchor 1" << std::endl;
+   std::cout << "_laserCloudCornerFromMapNum = " << _laserCloudCornerFromMap->size() << ", _laserCloudSurfFromMapNum -> " << _laserCloudSurfFromMap->size() << std::endl;
    if (_laserCloudCornerFromMap->size() <= 10 || _laserCloudSurfFromMap->size() <= 100)
       return;
+   std::cout << "anchor 2" << std::endl;
 
    pcl::PointXYZI pointSel, pointOri, coeff;
 
@@ -550,6 +571,9 @@ void BasicLaserMapping::optimizeTransformTobeMapped()
    {
       _laserCloudOri.clear();
       _coeffSel.clear();
+
+      std::cout << "DYP building constraint with corner feature" << std::endl;
+      std::cout << "DYP laserCloudCornerStackNum = " << laserCloudCornerStackNum << std::endl;
 
       for (int i = 0; i < laserCloudCornerStackNum; i++)
       {
@@ -634,6 +658,10 @@ void BasicLaserMapping::optimizeTransformTobeMapped()
          }
       }
 
+      std::cout << "DYP selected features = " << _laserCloudOri.size() << std::endl;
+      std::cout << "DYP building constraint with surface feature" << std::endl;
+      std::cout << "DYP laserCloudSurfStackNum = " << laserCloudSurfStackNum << std::endl;
+
       for (int i = 0; i < laserCloudSurfStackNum; i++)
       {
          pointOri = _laserCloudSurfStackDS->points[i];
@@ -691,6 +719,10 @@ void BasicLaserMapping::optimizeTransformTobeMapped()
             }
          }
       }
+
+      std::cout << "DYP selected features = " << _laserCloudOri.size() << std::endl;
+
+      std::cout << "DYP start optimization" << std::endl;
 
       float srx = sin(_transformSum.roll); // 坐标变换
       float crx = cos(_transformSum.roll);
@@ -786,6 +818,9 @@ void BasicLaserMapping::optimizeTransformTobeMapped()
       _transformSum.x += matX(3, 0);
       _transformSum.y += matX(4, 0);
       _transformSum.z += matX(5, 0);
+
+
+      std::cout << "DYP finish optimization" << std::endl;
 
       float deltaR = sqrt(pow(rad2deg(matX(0, 0)), 2) +
                           pow(rad2deg(matX(1, 0)), 2) +

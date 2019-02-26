@@ -76,6 +76,8 @@ namespace loam
     nanoflann::KdTreeFLANN<pcl::PointXYZI> _lastSurfaceKDTree;  ///< last surface cloud KD-tree
 
     pcl::PointCloud<pcl::PointXYZI>::Ptr _laserCloud;             ///< full resolution cloud
+    pcl::PointCloud<pcl::PointXYZI> _cornerPointsSharp; /* 投影到上一幀坐標系中的特徵點雲 */
+    pcl::PointCloud<pcl::PointXYZI> _surfPointsFlat; /* 投影到上一幀坐標系中的特徵點雲 */
 
     std::vector<int> _pointSearchCornerInd1;    ///< first corner point search index buffer
     std::vector<int> _pointSearchCornerInd2;    ///< second corner point search index buffer

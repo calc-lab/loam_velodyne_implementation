@@ -235,7 +235,7 @@ void BasicLaserOdometry::process(const std::vector<NAVDATA>& nav,
    _frameCount++;
    NAVDATA transformGlobal; /* 当前帧全局坐标 */
    interpolate(nav,scanTime,transformGlobal); /* 使用imu位姿信息初始化_transform */
-   transformToLast(_transformSum,transformGlobal,_transform);
+   transformToLast(_transformSum,transformGlobal,_transform); /* 已檢驗: 用全局坐標推相對坐標正確 */
 
    size_t lastCornerCloudSize = _lastCornerCloud->points.size();
    size_t lastSurfaceCloudSize = _lastSurfaceCloud->points.size();
@@ -262,10 +262,10 @@ void BasicLaserOdometry::process(const std::vector<NAVDATA>& nav,
                  
          _laserCloudOri->clear(); /* 用于优化的特征点集 */
          _coeffSel->clear(); /* 用于优化的参数 */
-//         pcl::transformPointCloud(cornerPointsSharp, _cornerPointsSharp, NAVDATA2Transform(_transform));
+         pcl::transformPointCloud(cornerPointsSharp, _cornerPointsSharp, NAVDATA2Transform(_transform));
          for (int i = 0; i < cornerPointsSharpNum; i++)
          {
-            pointSel = pcl::transformPoint(cornerPointsSharp.points[i],NAVDATA2Transform(_transform));
+            pointSel = _cornerPointsSharp.points[i];
 
             if (iterCount % 5 == 0)
             {
@@ -381,9 +381,10 @@ void BasicLaserOdometry::process(const std::vector<NAVDATA>& nav,
             }
          }
 
+         pcl::transformPointCloud(surfPointsFlat, _surfPointsFlat, NAVDATA2Transform(_transform));
          for (int i = 0; i < surfPointsFlatNum; i++)
          {
-            pointSel = pcl::transformPoint(surfPointsFlat.points[i],NAVDATA2Transform(_transform));
+            pointSel = _surfPointsFlat.points[i];
 
             if (iterCount % 5 == 0)
             {
@@ -619,13 +620,12 @@ void BasicLaserOdometry::process(const std::vector<NAVDATA>& nav,
          }
 
          /* 此处将激光点坐标系调整回imu坐标系 */
-         NAVDATA _temp = _transform;
          _transform.roll = _transform.roll + matX(0, 0);
          _transform.pitch = _transform.pitch + matX(1, 0);
          _transform.yaw = _transform.yaw + matX(2, 0);
-         _transform.x = _temp.x + matX(3, 0);
-         _transform.y = _temp.y + matX(4, 0);
-         _transform.z = _temp.z +matX(5, 0);
+         _transform.x = _transform.x + matX(3, 0);
+         _transform.y = _transform.y + matX(4, 0);
+         _transform.z = _transform.z +matX(5, 0);
 
          if (!pcl_isfinite(_transform.pitch)) _transform.pitch = 0.0;
          if (!pcl_isfinite(_transform.yaw)) _transform.yaw = 0.0;
@@ -648,7 +648,7 @@ void BasicLaserOdometry::process(const std::vector<NAVDATA>& nav,
             break;
          }
 
-         std::cout << "iterCount -> " << iterCount << ", deltaR -> " << deltaR << ", deltaT -> " << deltaT << std::endl;
+//         std::cout << "iterCount -> " << iterCount << ", deltaR -> " << deltaR << ", deltaT -> " << deltaT << std::endl;
 
       } // end of iterations
    } /* for循环终止 */

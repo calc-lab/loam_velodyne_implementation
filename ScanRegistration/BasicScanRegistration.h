@@ -56,8 +56,8 @@ namespace loam
   public:
     RegistrationParams(const float& scanPeriod_ = 0.1,
       const int& imuHistorySize_ = 200,
-      const int& nFeatureRegions_ = 6,
-      const int& curvatureRegion_ = 5,
+      const int& nFeatureRegions_ =3, //6,
+      const int& curvatureRegion_ = 10, //5,
       const int& maxCornerSharp_ = 1, //2,
       const int& maxSurfaceFlat_ = 2, //4,
       const float& lessFlatFilterSize_ = 0.2,

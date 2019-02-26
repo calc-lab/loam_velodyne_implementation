@@ -133,10 +133,6 @@ private:
 
    CircularBuffer<IMUState2> _imuHistory;    ///< history of IMU states
 
-//   pcl::VoxelGrid<pcl::PointXYZI> _downSizeFilterCorner;   ///< voxel filter for down sizing corner clouds
-//   pcl::VoxelGrid<pcl::PointXYZI> _downSizeFilterSurf;     ///< voxel filter for down sizing surface clouds
-//   pcl::VoxelGrid<pcl::PointXYZI> _downSizeFilterMap;      ///< voxel filter for down sizing accumulated map
-
    bool _downsizedMapCreated = false;
 
    NAVDATA _transform;
