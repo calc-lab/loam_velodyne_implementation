@@ -3,7 +3,7 @@
 #include "./LaserOdometry/LaserOdometry.h"
 #include "./LaserMapping/LaserMapping.h"
 
-//#define VIEW_MAP
+#define VIEW_MAP
 
 TRANSINFO	calibInfo;
 

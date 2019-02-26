@@ -11,6 +11,7 @@
 //#include <pcl/filters/voxel_grid.h>
 #include <pcl/keypoints/uniform_sampling.h>
 #include <pcl/common/transforms.h>
+#include <pcl/kdtree/kdtree_flann.h>
 
 namespace loam
 {
@@ -59,16 +60,16 @@ public:
                 const std::vector<NAVDATA>&,
                 pcl::PointCloud<pcl::PointXYZI>::Ptr&);
 private:
-    Eigen::Affine3f NAVDATA2Transform(const NAVDATA& nav);
+   Eigen::Affine3f NAVDATA2Transform(const NAVDATA& nav);
+
+   void interpolate(const vector<NAVDATA>& data, const long long& time, NAVDATA& result);
+
+   void DownsizePointCloud(const pcl::PointCloud<pcl::PointXYZI>&, pcl::PointCloud<pcl::PointXYZI>&, double);
 
    /** Run an optimization. */
    void optimizeTransformTobeMapped();
 
-   void transformAssociateToMap();
-   void transformUpdate();
    void pointAssociateToMap(const pcl::PointXYZI& pi, pcl::PointXYZI& po);
-   void pointAssociateTobeMapped(const pcl::PointXYZI& pi, pcl::PointXYZI& po);
-   void transformFullResToMap();
 
    bool createDownsizedMap();
 
@@ -77,11 +78,10 @@ private:
    { return i + _laserCloudWidth * j + _laserCloudWidth * _laserCloudHeight * k; }
 
 private:
-   Time _laserOdometryTime;
-
-    NAVDATA cur_state; /* 当前时刻位姿 */
+   NAVDATA cur_state; /* 当前时刻位姿 */
 
    float _scanPeriod;          ///< time per scan
+
    const int _stackFrameNum;
    const int _mapFrameNum;
    long _frameCount;
@@ -126,7 +126,10 @@ private:
    pcl::PointCloud<pcl::PointXYZI> _laserCloudOri;
    pcl::PointCloud<pcl::PointXYZI> _coeffSel;
 
-   Twist _transformSum, _transformIncre, _transformTobeMapped, _transformBefMapped, _transformAftMapped;
+   NAVDATA _transformSum;
+   NAVDATA _transformGlobal;
+
+   Twist _transformIncre, _transformTobeMapped, _transformBefMapped, _transformAftMapped;
 
    CircularBuffer<IMUState2> _imuHistory;    ///< history of IMU states
 

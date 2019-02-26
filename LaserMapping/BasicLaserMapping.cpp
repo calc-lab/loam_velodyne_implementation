@@ -67,110 +67,6 @@ BasicLaserMapping::BasicLaserMapping(const float& scanPeriod, const size_t& maxI
 }
 
 
-void BasicLaserMapping::transformAssociateToMap()
-{
-   _transformIncre.pos = _transformBefMapped.pos - _transformSum.pos;
-   rotateYXZ(_transformIncre.pos, -(_transformSum.rot_y), -(_transformSum.rot_x), -(_transformSum.rot_z));
-
-   float sbcx = _transformSum.rot_x.sin();
-   float cbcx = _transformSum.rot_x.cos();
-   float sbcy = _transformSum.rot_y.sin();
-   float cbcy = _transformSum.rot_y.cos();
-   float sbcz = _transformSum.rot_z.sin();
-   float cbcz = _transformSum.rot_z.cos();
-
-   float sblx = _transformBefMapped.rot_x.sin();
-   float cblx = _transformBefMapped.rot_x.cos();
-   float sbly = _transformBefMapped.rot_y.sin();
-   float cbly = _transformBefMapped.rot_y.cos();
-   float sblz = _transformBefMapped.rot_z.sin();
-   float cblz = _transformBefMapped.rot_z.cos();
-
-   float salx = _transformAftMapped.rot_x.sin();
-   float calx = _transformAftMapped.rot_x.cos();
-   float saly = _transformAftMapped.rot_y.sin();
-   float caly = _transformAftMapped.rot_y.cos();
-   float salz = _transformAftMapped.rot_z.sin();
-   float calz = _transformAftMapped.rot_z.cos();
-
-   float srx = -sbcx * (salx*sblx + calx * cblx*salz*sblz + calx * calz*cblx*cblz)
-      - cbcx * sbcy*(calx*calz*(cbly*sblz - cblz * sblx*sbly)
-                     - calx * salz*(cbly*cblz + sblx * sbly*sblz) + cblx * salx*sbly)
-      - cbcx * cbcy*(calx*salz*(cblz*sbly - cbly * sblx*sblz)
-                     - calx * calz*(sbly*sblz + cbly * cblz*sblx) + cblx * cbly*salx);
-   _transformTobeMapped.rot_x = -asin(srx);
-
-   float srycrx = sbcx * (cblx*cblz*(caly*salz - calz * salx*saly)
-                          - cblx * sblz*(caly*calz + salx * saly*salz) + calx * saly*sblx)
-      - cbcx * cbcy*((caly*calz + salx * saly*salz)*(cblz*sbly - cbly * sblx*sblz)
-                     + (caly*salz - calz * salx*saly)*(sbly*sblz + cbly * cblz*sblx) - calx * cblx*cbly*saly)
-      + cbcx * sbcy*((caly*calz + salx * saly*salz)*(cbly*cblz + sblx * sbly*sblz)
-                     + (caly*salz - calz * salx*saly)*(cbly*sblz - cblz * sblx*sbly) + calx * cblx*saly*sbly);
-   float crycrx = sbcx * (cblx*sblz*(calz*saly - caly * salx*salz)
-                          - cblx * cblz*(saly*salz + caly * calz*salx) + calx * caly*sblx)
-      + cbcx * cbcy*((saly*salz + caly * calz*salx)*(sbly*sblz + cbly * cblz*sblx)
-                     + (calz*saly - caly * salx*salz)*(cblz*sbly - cbly * sblx*sblz) + calx * caly*cblx*cbly)
-      - cbcx * sbcy*((saly*salz + caly * calz*salx)*(cbly*sblz - cblz * sblx*sbly)
-                     + (calz*saly - caly * salx*salz)*(cbly*cblz + sblx * sbly*sblz) - calx * caly*cblx*sbly);
-   _transformTobeMapped.rot_y = atan2(srycrx / _transformTobeMapped.rot_x.cos(),
-                                      crycrx / _transformTobeMapped.rot_x.cos());
-
-   float srzcrx = (cbcz*sbcy - cbcy * sbcx*sbcz)*(calx*salz*(cblz*sbly - cbly * sblx*sblz)
-                                                  - calx * calz*(sbly*sblz + cbly * cblz*sblx) + cblx * cbly*salx)
-      - (cbcy*cbcz + sbcx * sbcy*sbcz)*(calx*calz*(cbly*sblz - cblz * sblx*sbly)
-                                        - calx * salz*(cbly*cblz + sblx * sbly*sblz) + cblx * salx*sbly)
-      + cbcx * sbcz*(salx*sblx + calx * cblx*salz*sblz + calx * calz*cblx*cblz);
-   float crzcrx = (cbcy*sbcz - cbcz * sbcx*sbcy)*(calx*calz*(cbly*sblz - cblz * sblx*sbly)
-                                                  - calx * salz*(cbly*cblz + sblx * sbly*sblz) + cblx * salx*sbly)
-      - (sbcy*sbcz + cbcy * cbcz*sbcx)*(calx*salz*(cblz*sbly - cbly * sblx*sblz)
-                                        - calx * calz*(sbly*sblz + cbly * cblz*sblx) + cblx * cbly*salx)
-      + cbcx * cbcz*(salx*sblx + calx * cblx*salz*sblz + calx * calz*cblx*cblz);
-   _transformTobeMapped.rot_z = atan2(srzcrx / _transformTobeMapped.rot_x.cos(),
-                                      crzcrx / _transformTobeMapped.rot_x.cos());
-
-   Vector3 v = _transformIncre.pos;
-   rotateZXY(v, _transformTobeMapped.rot_z, _transformTobeMapped.rot_x, _transformTobeMapped.rot_y);
-   _transformTobeMapped.pos = _transformAftMapped.pos - v;
-}
-
-
-
-void BasicLaserMapping::transformUpdate()
-{
-   if (0 < _imuHistory.size())
-   {
-      size_t imuIdx = 0;
-
-      while (imuIdx < _imuHistory.size() - 1 && toSec(_laserOdometryTime - _imuHistory[imuIdx].stamp) + _scanPeriod > 0)
-      {
-         imuIdx++;
-      }
-
-      IMUState2 imuCur;
-
-      if (imuIdx == 0 || toSec(_laserOdometryTime - _imuHistory[imuIdx].stamp) + _scanPeriod > 0)
-      {
-         // scan time newer then newest or older than oldest IMU message
-         imuCur = _imuHistory[imuIdx];
-      }
-      else
-      {
-         float ratio = (toSec(_imuHistory[imuIdx].stamp - _laserOdometryTime) - _scanPeriod)
-            / toSec(_imuHistory[imuIdx].stamp - _imuHistory[imuIdx - 1].stamp);
-
-         IMUState2::interpolate(_imuHistory[imuIdx], _imuHistory[imuIdx - 1], ratio, imuCur);
-      }
-
-      _transformTobeMapped.rot_x = 0.998 * _transformTobeMapped.rot_x.rad() + 0.002 * imuCur.pitch.rad();
-      _transformTobeMapped.rot_z = 0.998 * _transformTobeMapped.rot_z.rad() + 0.002 * imuCur.roll.rad();
-   }
-
-   _transformBefMapped = _transformSum;
-   _transformAftMapped = _transformTobeMapped;
-}
-
-
-
 void BasicLaserMapping::pointAssociateToMap(const pcl::PointXYZI& pi, pcl::PointXYZI& po)
 {
    pcl::PointXYZI newPoint = pi;
@@ -185,26 +81,6 @@ void BasicLaserMapping::pointAssociateToMap(const pcl::PointXYZI& pi, pcl::Point
    po.z = newPoint.z + cur_state.z;
 }
 
-
-
-void BasicLaserMapping::pointAssociateTobeMapped(const pcl::PointXYZI& pi, pcl::PointXYZI& po)
-{
-   po.x = pi.x - _transformTobeMapped.pos.x();
-   po.y = pi.y - _transformTobeMapped.pos.y();
-   po.z = pi.z - _transformTobeMapped.pos.z();
-   po.intensity = pi.intensity;
-
-   rotateYXZ(po, -_transformTobeMapped.rot_y, -_transformTobeMapped.rot_x, -_transformTobeMapped.rot_z);
-}
-
-
-
-void BasicLaserMapping::transformFullResToMap()
-{
-   // transform full resolution input cloud to map
-   for (auto& pt : *_laserCloudFullRes)
-      pointAssociateToMap(pt, pt);
-}
 
 bool BasicLaserMapping::createDownsizedMap()
 {
@@ -225,9 +101,7 @@ bool BasicLaserMapping::createDownsizedMap()
 
    // down size map cloud
    _laserCloudSurroundDS->clear();
-   //TODO: 降采样
-//   _downSizeFilterCorner.setInputCloud(_laserCloudSurround);
-//   _downSizeFilterCorner.filter(*_laserCloudSurroundDS);
+   DownsizePointCloud(*_laserCloudSurround, *_laserCloudSurroundDS, 3.0); // 降采样
    return true;
 }
 
@@ -240,6 +114,50 @@ Eigen::Affine3f BasicLaserMapping::NAVDATA2Transform(const NAVDATA &nav) {
    return transform_;
 }
 
+void BasicLaserMapping::interpolate(const vector<NAVDATA>& data,
+                                         const long long& time,
+                                         NAVDATA& result)
+{
+    int pos = 0;
+    int length = data.size();
+    for(;pos < length && data[pos].millisec < time; pos++);
+    if(pos == length){
+        result = data[--pos];
+        return;
+    }
+    if(length == 1){
+        result = data[0];
+        return;
+    }
+    float ratio = 1.0 * (time - data[pos-1].millisec) / (data[pos].millisec - data[pos-1].millisec);
+    float invRatio = 1 - ratio;
+    result.millisec = time;
+    result.roll = invRatio * data[pos-1].roll + ratio * data[pos].roll;
+    result.pitch = invRatio * data[pos-1].pitch + ratio * data[pos].pitch;
+    result.yaw = invRatio * data[pos-1].yaw + ratio * data[pos].yaw;
+    result.x = invRatio * data[pos-1].x + ratio * data[pos].x;
+    result.y = invRatio * data[pos-1].y + ratio * data[pos].y;
+    result.z = invRatio * data[pos-1].z + ratio * data[pos].z;
+};
+
+
+void BasicLaserMapping::DownsizePointCloud(const pcl::PointCloud<pcl::PointXYZI> & laserCloudIn,
+                                           pcl::PointCloud<pcl::PointXYZI> & laserCloudOut,
+                                           double filter_size) {
+   if(laserCloudIn.points.size() <= 0)
+   {
+      laserCloudOut = laserCloudIn;
+      return;
+   }
+   pcl::UniformSampling<pcl::PointXYZI> filter;
+   filter.setInputCloud(laserCloudIn.makeShared());
+   filter.setRadiusSearch(filter_size);
+   pcl::PointCloud<int> keypointIndices;
+   filter.compute(keypointIndices);
+   pcl::copyPointCloud(laserCloudIn, keypointIndices.points, laserCloudOut);
+}
+
+
 void BasicLaserMapping::process(const pcl::PointCloud<pcl::PointXYZI>::Ptr laserCloudIn,
                                const pcl::PointCloud<pcl::PointXYZI>& cornerPointsSharp,
                                const pcl::PointCloud<pcl::PointXYZI>& surPointsFlat,
@@ -247,42 +165,33 @@ void BasicLaserMapping::process(const pcl::PointCloud<pcl::PointXYZI>::Ptr laser
                                const std::vector<NAVDATA>& nav,
                                pcl::PointCloud<pcl::PointXYZI>::Ptr& laserCloudMap)
 {
-   /* TODO: 对点云进行降采样 */
-//   pcl::PointCloud<pcl::PointXYZI>::Ptr laserCloudInDS(new pcl::PointCloud<pcl::PointXYZI>); // = laserCloudIn;
-//   pcl::UniformSampling<pcl::PointXYZI> filter;
-//   filter.setInputCloud(laserCloudIn);
-//   filter.setRadiusSearch(3.f);
-//   pcl::PointCloud<int> keypointIndices;
-//   filter.compute(keypointIndices);
-//   pcl::copyPointCloud(*laserCloudIn, keypointIndices.points, *laserCloudInDS);
-//
-//   std::cout << "laserCloudInNum -> " << laserCloudIn->points.size() << std::endl;
-//   std::cout << "laserCloudInDSNum -> " << laserCloudInDS->points.size() << std::endl;
-//
-//   /* 查找当前帧对应的nav信息 */
-//   int cur_index = 0;
-//   int NavDataNum = nav.size();
-//   for(; cur_index < NavDataNum && nav[cur_index].millisec < scanTime; cur_index++);
-//
-//   std::cout << "scanTime - navTime = " << scanTime - nav[cur_index].millisec << std::endl;
-//
-//   cur_state = nav[cur_index];
-//
-//   pcl::PointXYZI pointSel;
-//
-//   // TODO: 修改这个函数
-////   transformAssociateToMap();
-//
-//   pcl::PointCloud<pcl::PointXYZI> laserCloudInDSStack;
-//
-//   for (auto const& pt : laserCloudInDS->points)
-//   {
-//      pointAssociateToMap(pt, pointSel);
-//      laserCloudMap->push_back(pointSel);
-//   }
-////   laserCloudMap = laserCloudInDSStack.makeShared();
-////   std::cout << "laserCloudInDSStackNum -> " << laserCloudInDSStack.points.size() << std::endl;
-//   return;
+#if false
+   pcl::PointCloud<pcl::PointXYZI>::Ptr laserCloudInDS(new pcl::PointCloud<pcl::PointXYZI>);
+   DownsizePointCloud(*laserCloudIn, *laserCloudInDS, 3.f);
+
+   std::cout << "laserCloudInNum -> " << laserCloudIn->points.size() << std::endl;
+   std::cout << "laserCloudInDSNum -> " << laserCloudInDS->points.size() << std::endl;
+
+   /* 查找当前帧对应的nav信息 */
+   int cur_index = 0;
+   int NavDataNum = nav.size();
+   for(; cur_index < NavDataNum && nav[cur_index].millisec < scanTime; cur_index++);
+
+   std::cout << "scanTime - navTime = " << scanTime - nav[cur_index].millisec << std::endl;
+
+   cur_state = nav[cur_index];
+
+   pcl::PointXYZI pointSel_;
+
+   pcl::PointCloud<pcl::PointXYZI> laserCloudInDSStack;
+
+   for (auto const& pt : laserCloudInDS->points)
+   {
+      pointAssociateToMap(pt, pointSel_);
+      laserCloudMap->push_back(pointSel_);
+   }
+   return;
+#endif
 
    _frameCount++;
    if(_frameCount < _stackFrameNum)
@@ -293,7 +202,7 @@ void BasicLaserMapping::process(const pcl::PointCloud<pcl::PointXYZI>::Ptr laser
 
    pcl::PointXYZI pointSel;
 
-   /* TODO: 准备全局坐标系 */
+   interpolate(nav, scanTime, _transformSum); /* 使用imu位姿信息初始化_transform */
 
    for(auto const& pt : cornerPointsSharp.points)
    {
@@ -317,13 +226,13 @@ void BasicLaserMapping::process(const pcl::PointCloud<pcl::PointXYZI>::Ptr laser
    auto const CUBE_HALF = CUBE_SIZE / 2;
 
    /* 计算中心点(当前位置)在地图超立方体中的索引 */
-   int centerCubeI = int((_transformTobeMapped.pos.x() + CUBE_HALF) / CUBE_SIZE) + _laserCloudCenWidth;
-   int centerCubeJ = int((_transformTobeMapped.pos.y() + CUBE_HALF) / CUBE_SIZE) + _laserCloudCenHeight;
-   int centerCubeK = int((_transformTobeMapped.pos.z() + CUBE_HALF) / CUBE_SIZE) + _laserCloudCenDepth;
+   int centerCubeI = int((_transformSum.x + CUBE_HALF) / CUBE_SIZE) + _laserCloudCenWidth;
+   int centerCubeJ = int((_transformSum.y + CUBE_HALF) / CUBE_SIZE) + _laserCloudCenHeight;
+   int centerCubeK = int((_transformSum.z + CUBE_HALF) / CUBE_SIZE) + _laserCloudCenDepth;
 
-   if (_transformTobeMapped.pos.x() + CUBE_HALF < 0) centerCubeI--;
-   if (_transformTobeMapped.pos.y() + CUBE_HALF < 0) centerCubeJ--;
-   if (_transformTobeMapped.pos.z() + CUBE_HALF < 0) centerCubeK--;
+   if (_transformSum.x + CUBE_HALF < 0) centerCubeI--;
+   if (_transformSum.y + CUBE_HALF < 0) centerCubeJ--;
+   if (_transformSum.z + CUBE_HALF < 0) centerCubeK--;
 
    while (centerCubeI < 3)
    {
@@ -457,7 +366,10 @@ void BasicLaserMapping::process(const pcl::PointCloud<pcl::PointXYZI>::Ptr laser
                float centerY = 200.0f * (j - _laserCloudCenHeight);
                float centerZ = 200.0f * (k - _laserCloudCenDepth);
 
-               pcl::PointXYZI transform_pos = (pcl::PointXYZI) _transformTobeMapped.pos; // 坐标变换 值为当前车辆位置
+               pcl::PointXYZI transform_pos; // 坐标变换 值为当前车辆位置
+               transform_pos.x = _transformSum.x;
+               transform_pos.y = _transformSum.y;
+               transform_pos.z = _transformSum.z;
 
                /* 计算当前点是否在视野内 */
                bool isInLaserFOV = false;
@@ -510,24 +422,19 @@ void BasicLaserMapping::process(const pcl::PointCloud<pcl::PointXYZI>::Ptr laser
    }
 
    // prepare feature stack clouds for pose optimization
-//   for (auto& pt : *_laserCloudCornerStack)
-//      pointAssociateTobeMapped(pt, pt);
-
-//   for (auto& pt : *_laserCloudSurfStack)
-//      pointAssociateTobeMapped(pt, pt);
+//   pcl::transformPointCloud(*_laserCloudCornerStack, *_laserCloudCornerStack, NAVDATA2Transform(_transformSum));
+//   pcl::transformPointCloud(*_laserCloudSurfStack, *_laserCloudSurfStack, NAVDATA2Transform(_transformSum));
 
    // down sample feature stack clouds
    _laserCloudCornerStackDS->clear();
-   //TODO: 降采样
    _laserCloudCornerStackDS = _laserCloudCornerStack;
-//   _downSizeFilterCorner.setInputCloud(_laserCloudCornerStack);
-//   _downSizeFilterCorner.filter(*_laserCloudCornerStackDS);
+   DownsizePointCloud(*_laserCloudCornerStack, *_laserCloudCornerStackDS, 3.0); // 降采样
+
    size_t laserCloudCornerStackNum = _laserCloudCornerStackDS->size();
 
    _laserCloudSurfStackDS->clear();
    _laserCloudSurfStackDS = _laserCloudSurfStack;
-//   _downSizeFilterSurf.setInputCloud(_laserCloudSurfStack);
-//   _downSizeFilterSurf.filter(*_laserCloudSurfStackDS);
+   DownsizePointCloud(*_laserCloudSurfStack, *_laserCloudSurfStackDS, 3.0); // 降采样
    size_t laserCloudSurfStackNum = _laserCloudSurfStackDS->size();
 
    _laserCloudCornerStack->clear();
@@ -538,8 +445,7 @@ void BasicLaserMapping::process(const pcl::PointCloud<pcl::PointXYZI>::Ptr laser
    // store down sized corner stack points in corresponding cube clouds
    for (int i = 0; i < laserCloudCornerStackNum; i++)
    {
-      pointSel = _laserCloudCornerStackDS->points[i];
-//      pointAssociateToMap(_laserCloudCornerStackDS->points[i], pointSel); // TODO: 坐标变换
+      pointSel = pcl::transformPoint(_laserCloudCornerStackDS->points[i], NAVDATA2Transform(_transformSum)); // 坐标变换
 
       /* 求pointSel所对应的index */
       int cubeI = int((pointSel.x + CUBE_HALF) / CUBE_SIZE) + _laserCloudCenWidth;
@@ -562,8 +468,7 @@ void BasicLaserMapping::process(const pcl::PointCloud<pcl::PointXYZI>::Ptr laser
    // store down sized surface stack points in corresponding cube clouds
    for (int i = 0; i < laserCloudSurfStackNum; i++)
    {
-      pointSel = _laserCloudSurfStackDS->points[i];
-//      pointAssociateToMap(_laserCloudSurfStackDS->points[i], pointSel); // TODO: 坐标变换
+      pointSel = pcl::transformPoint(_laserCloudSurfStackDS->points[i], NAVDATA2Transform(_transformSum)); // 坐标变换
 
       int cubeI = int((pointSel.x + CUBE_HALF) / CUBE_SIZE) + _laserCloudCenWidth;
       int cubeJ = int((pointSel.y + CUBE_HALF) / CUBE_SIZE) + _laserCloudCenHeight;
@@ -586,13 +491,10 @@ void BasicLaserMapping::process(const pcl::PointCloud<pcl::PointXYZI>::Ptr laser
    for (auto const& ind : _laserCloudValidInd)
    {
       _laserCloudCornerDSArray[ind]->clear();
-      //TODO: 降采样
-//      _downSizeFilterCorner.setInputCloud(_laserCloudCornerArray[ind]);
-//      _downSizeFilterCorner.filter(*_laserCloudCornerDSArray[ind]);
+      DownsizePointCloud(*_laserCloudCornerArray[ind], *_laserCloudCornerDSArray[ind], 3.0); // 降采样
 
       _laserCloudSurfDSArray[ind]->clear();
-//      _downSizeFilterSurf.setInputCloud(_laserCloudSurfArray[ind]);
-//      _downSizeFilterSurf.filter(*_laserCloudSurfDSArray[ind]);
+      DownsizePointCloud(*_laserCloudSurfArray[ind], *_laserCloudSurfDSArray[ind], 3.0); // 降采样
 
       // swap cube clouds for next processing
       _laserCloudCornerArray[ind].swap(_laserCloudCornerDSArray[ind]);
@@ -603,8 +505,10 @@ void BasicLaserMapping::process(const pcl::PointCloud<pcl::PointXYZI>::Ptr laser
    laserCloudMap = _laserCloudSurroundDS;
 }
 
+
 nanoflann::KdTreeFLANN<pcl::PointXYZI> kdtreeCornerFromMap;
 nanoflann::KdTreeFLANN<pcl::PointXYZI> kdtreeSurfFromMap;
+
 
 void BasicLaserMapping::optimizeTransformTobeMapped()
 {
@@ -616,6 +520,8 @@ void BasicLaserMapping::optimizeTransformTobeMapped()
    std::vector<int> pointSearchInd(5, 0);
    std::vector<float> pointSearchSqDis(5, 0);
 
+   std::cout << "_laserCloudCornerFromMap -> " << _laserCloudCornerFromMap->size() << ", " << _laserCloudCornerFromMap->points.size() << std::endl;
+   std::cout << "_laserCloudSurfFromMap -> " << _laserCloudSurfFromMap->size() << ", " << _laserCloudSurfFromMap->points.size() << std::endl;
    kdtreeCornerFromMap.setInputCloud(_laserCloudCornerFromMap);
    kdtreeSurfFromMap.setInputCloud(_laserCloudSurfFromMap);
 
@@ -648,7 +554,7 @@ void BasicLaserMapping::optimizeTransformTobeMapped()
       for (int i = 0; i < laserCloudCornerStackNum; i++)
       {
          pointOri = _laserCloudCornerStackDS->points[i];
-         pointAssociateToMap(pointOri, pointSel); // TODO: 坐标变换
+         pointSel = pcl::transformPoint(pointOri, NAVDATA2Transform(_transformSum)); // 坐标变换
          kdtreeCornerFromMap.nearestKSearch(pointSel, 5, pointSearchInd, pointSearchSqDis);
 
          if (pointSearchSqDis[4] < 1.0)
@@ -731,7 +637,7 @@ void BasicLaserMapping::optimizeTransformTobeMapped()
       for (int i = 0; i < laserCloudSurfStackNum; i++)
       {
          pointOri = _laserCloudSurfStackDS->points[i];
-         pointAssociateToMap(pointOri, pointSel); // TODO: 坐标变换
+         pointSel = pcl::transformPoint(pointOri, NAVDATA2Transform(_transformSum)); // 坐标变换
          kdtreeSurfFromMap.nearestKSearch(pointSel, 5, pointSearchInd, pointSearchSqDis);
 
          if (pointSearchSqDis[4] < 1.0)
@@ -786,12 +692,12 @@ void BasicLaserMapping::optimizeTransformTobeMapped()
          }
       }
 
-      float srx = _transformTobeMapped.rot_x.sin(); //TODO: 坐标变换
-      float crx = _transformTobeMapped.rot_x.cos();
-      float sry = _transformTobeMapped.rot_y.sin();
-      float cry = _transformTobeMapped.rot_y.cos();
-      float srz = _transformTobeMapped.rot_z.sin();
-      float crz = _transformTobeMapped.rot_z.cos();
+      float srx = sin(_transformSum.roll); // 坐标变换
+      float crx = cos(_transformSum.roll);
+      float sry = sin(_transformSum.pitch);
+      float cry = cos(_transformSum.pitch);
+      float srz = sin(_transformSum.yaw);
+      float crz = cos(_transformSum.yaw);
 
       size_t laserCloudSelNum = _laserCloudOri.size();
       if (laserCloudSelNum < 50)
@@ -874,12 +780,12 @@ void BasicLaserMapping::optimizeTransformTobeMapped()
          matX = matP * matX2;
       }
 
-      _transformTobeMapped.rot_x += matX(0, 0); //TODO: 坐标变换
-      _transformTobeMapped.rot_y += matX(1, 0);
-      _transformTobeMapped.rot_z += matX(2, 0);
-      _transformTobeMapped.pos.x() += matX(3, 0);
-      _transformTobeMapped.pos.y() += matX(4, 0);
-      _transformTobeMapped.pos.z() += matX(5, 0);
+      _transformSum.roll += matX(0, 0); // 坐标变换
+      _transformSum.pitch += matX(1, 0);
+      _transformSum.yaw += matX(2, 0);
+      _transformSum.x += matX(3, 0);
+      _transformSum.y += matX(4, 0);
+      _transformSum.z += matX(5, 0);
 
       float deltaR = sqrt(pow(rad2deg(matX(0, 0)), 2) +
                           pow(rad2deg(matX(1, 0)), 2) +
