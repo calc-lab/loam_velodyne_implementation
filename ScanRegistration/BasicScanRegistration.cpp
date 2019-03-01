@@ -168,7 +168,7 @@ void BasicScanRegistration::extractFeatures(const uint16_t& beginIdx)
         size_t regionIdx = idx - sp;
 
         if (_scanNeighborPicked[scanIdx] == 0 &&
-            _regionCurvature[regionIdx] > 50. /*_config.surfaceCurvatureThreshold*/) {
+            _regionCurvature[regionIdx] > _config.surfaceCurvatureThreshold) { //TODO: 调整特征点选择阈值
 
           largestPickedNum++;
           if (largestPickedNum <= _config.maxCornerSharp) {
@@ -191,7 +191,7 @@ void BasicScanRegistration::extractFeatures(const uint16_t& beginIdx)
         size_t regionIdx = idx - sp;
 
         if (_scanNeighborPicked[scanIdx] == 0 &&
-            _regionCurvature[regionIdx] < 0.001 /*_config.surfaceCurvatureThreshold*/) {
+            _regionCurvature[regionIdx] < _config.surfaceCurvatureThreshold) { //TODO: 调整特征点选择阈值
 
           smallestPickedNum++;
           _regionLabel[regionIdx] = SURFACE_FLAT;

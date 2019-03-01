@@ -256,6 +256,10 @@ void BasicLaserOdometry::process(const std::vector<NAVDATA>& nav,
       _pointSearchSurfInd2.resize(surfPointsFlatNum);
       _pointSearchSurfInd3.resize(surfPointsFlatNum);
 
+      std::cout << "#C current frame timestamp -> " << scanTime << std::endl;
+      std::cout << "#C cornerPointsSharpNum -> " << cornerPointsSharpNum << std::endl;
+      std::cout << "#C surfPointsSharpNum -> " << surfPointsFlatNum << std::endl;
+
       for (size_t iterCount = 0; iterCount < _maxIterations; iterCount++)
       {
          pcl::PointXYZI pointSel, pointProj, tripod1, tripod2, tripod3;
@@ -378,6 +382,7 @@ void BasicLaserOdometry::process(const std::vector<NAVDATA>& nav,
                   _laserCloudOri->push_back(cornerPointsSharp.points[i]);
                   _coeffSel->push_back(coeff);
                }
+
             }
          }
 
@@ -503,6 +508,9 @@ void BasicLaserOdometry::process(const std::vector<NAVDATA>& nav,
          }
 
          int pointSelNum = _laserCloudOri->points.size();
+
+          std::cout << "DD _laserCloudOri's size = " << _laserCloudOri->size() << std::endl;
+
          if (pointSelNum < 10)
          {
             continue;

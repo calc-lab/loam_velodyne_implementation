@@ -3,6 +3,8 @@
 #include "./LaserOdometry/LaserOdometry.h"
 #include "./LaserMapping/LaserMapping.h"
 
+#include <pcl/common/transforms.h>
+
 #define VIEW_MAP
 
 TRANSINFO	calibInfo;
@@ -144,7 +146,8 @@ void CorrectPoints ()
 
 	for (int i=1; i<BKNUM_PER_FRM; i++) {
 		for (int j=0; j<PTNUM_PER_BLK; j++) {
-			if (!onefrm->dsv[i].points[j].i)
+
+            if (!onefrm->dsv[i].points[j].x)
 				continue;
 
 			rotatePoint3fi(onefrm->dsv[i].points[j], calibInfo.rot);
@@ -203,7 +206,8 @@ void ProcessOneFrame ()
 		rm.segbuf = new SEGBUF[rm.regnum];
 		memset (rm.segbuf, 0, sizeof (SEGBUF)*rm.regnum);
         Region2Seg ();
-	}	
+	}
+
     DrawRangeView ();
 	
     PredictGloDem (gm,ggm);
@@ -238,7 +242,7 @@ void ConvertPointCloudType ()
         for (int j = 0; j < LINES_PER_BLK; j++) {
             for (int k = 0; k < PNTS_PER_LINE; k++) {
                 point3fi *p = &onefrm->dsv[i].points[j * PNTS_PER_LINE + k];
-                if (!p->i)
+                if (!p->x)
                     continue;
                 pcl::PointXYZI single_laserCloudIn;
 //                single_laserCloudIn.x = p->y; single_laserCloudIn.y = p->z; single_laserCloudIn.z = p->x; single_laserCloudIn.intensity = 1.;
@@ -404,6 +408,17 @@ void LoadNav()
     int millisec, stat;
     double gx, gy, gz, roll, pitch, yaw;
     while (fscanf(navFp, "%d %lf %lf %lf %lf %lf %lf %d\n", &millisec, &roll, &pitch, &yaw, &gx, &gy, &gz, &stat) != EOF) {
+//        gx -= 4447096.6;
+//        gy -= 424635.1;
+//        gz -= 89.0;
+//        pcl::PointXYZI newPoint;
+//        newPoint.x = gx; newPoint.y = gy; newPoint.z = gz;
+//        Eigen::Affine3f init = Eigen::Affine3f::Identity();
+//        init.translation() << 0., 0., 0.;
+//        init.rotate(Eigen::AngleAxisf (yaw, Eigen::Vector3f::UnitZ()));
+//        float x, y, z, _roll, _pitch, _yaw;
+//        pcl::getTranslationAndEulerAngles(init,x,y,z,_roll,_pitch,_yaw);
+//        std::cout << "nav -> " << x << ", " << y << ", " << z << ", " << roll << ", " << pitch << ", " << yaw << std::endl;
         nav.push_back((NAVDATA){millisec, gx, gy, gz, roll, pitch, yaw, stat});
     }
     navLeft = 0;

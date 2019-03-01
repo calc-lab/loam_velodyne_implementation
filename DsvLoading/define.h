@@ -82,7 +82,7 @@ typedef struct {
 #define	PNTS_PER_LINE		32
 #define	LINES_PER_BLK		12
 #define	PTNUM_PER_BLK		(32*12)
-#define	BKNUM_PER_FRM		580 / 2
+#define	BKNUM_PER_FRM		(580/2)
 #define	SCANDATASIZE		(BKNUM_PER_FRM*LINES_PER_BLK/2)
 
 //for vel64
